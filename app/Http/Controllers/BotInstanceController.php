@@ -209,8 +209,8 @@ class BotInstanceController extends Controller
             'strategy_id' => 'required|exists:strategies,id',
             'allocated_capital' => 'required|numeric|min:10',
             'max_drawdown_pct' => 'required|numeric|min:1|max:100',
-            'take_profit_pct' => 'required|numeric|min:0.1',
-            'stop_loss_pct' => 'required|numeric|min:0.1',
+            'take_profit_pct' => 'required|numeric|min:0',
+            'stop_loss_pct' => 'required|numeric|min:0',
         ]);
 
         // Ensure the broker account actually belongs to this user

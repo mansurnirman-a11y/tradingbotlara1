@@ -114,10 +114,10 @@ class EvaluateStrategyJob implements ShouldQueue
                 }
 
                 // Override signal to force close if SL/TP hit
-                if ($pnlPct <= -$slPct) {
+                if ($slPct > 0 && $pnlPct <= -$slPct) {
                     $signal = ($openPosition->side === 'LONG') ? 'SELL' : 'BUY';
                     \Log::info("Bot {$this->bot->id}: Stop Loss hit ({$pnlPct}%). Forcing {$signal} signal.");
-                } elseif ($pnlPct >= $tpPct) {
+                } elseif ($tpPct > 0 && $pnlPct >= $tpPct) {
                     $signal = ($openPosition->side === 'LONG') ? 'SELL' : 'BUY';
                     \Log::info("Bot {$this->bot->id}: Take Profit hit ({$pnlPct}%). Forcing {$signal} signal.");
                 }

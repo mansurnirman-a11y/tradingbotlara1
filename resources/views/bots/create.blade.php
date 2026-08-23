@@ -40,7 +40,7 @@
                     <select name="strategy_id" class="form-input" required style="background: rgba(0,0,0,0.5);">
                         <option value="">-- Select Strategy --</option>
                         @foreach($strategies as $strat)
-                            <option value="{{ $strat->id }}">
+                            <option value="{{ $strat->id }}" data-class-name="{{ $strat->class_name }}">
                                 {{ $strat->name }} 
                                 @if($strat->type === 'webhook') (TradingView Webhook) @endif
                             </option>
@@ -103,4 +103,52 @@
         </form>
     </div>
 </div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const strategySelect = document.querySelector('select[name="strategy_id"]');
+    const tpInput = document.querySelector('input[name="take_profit_pct"]');
+    const slInput = document.querySelector('input[name="stop_loss_pct"]');
+    
+    const originalTp = "3.0";
+    const originalSl = "1.5";
+
+    function toggleRiskFields() {
+        const selectedOption = strategySelect.options[strategySelect.selectedIndex];
+        if (!selectedOption) return;
+
+        const className = selectedOption.getAttribute('data-class-name');
+
+        if (className === 'App\\Strategies\\EmaCrossoverStrategy') {
+            tpInput.value = '0.0';
+            slInput.value = '0.0';
+            tpInput.readOnly = true;
+            slInput.readOnly = true;
+            tpInput.style.opacity = '0.5';
+            slInput.style.opacity = '0.5';
+            tpInput.style.cursor = 'not-allowed';
+            slInput.style.cursor = 'not-allowed';
+        } else {
+            if (tpInput.value === '0.0' || tpInput.value === '0') {
+                tpInput.value = originalTp;
+            }
+            if (slInput.value === '0.0' || slInput.value === '0') {
+                slInput.value = originalSl;
+            }
+            tpInput.readOnly = false;
+            slInput.readOnly = false;
+            tpInput.style.opacity = '1';
+            slInput.style.opacity = '1';
+            tpInput.style.cursor = 'auto';
+            slInput.style.cursor = 'auto';
+        }
+    }
+
+    strategySelect.addEventListener('change', toggleRiskFields);
+    
+    if (strategySelect.value) {
+        toggleRiskFields();
+    }
+});
+</script>
 @endsection

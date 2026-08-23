@@ -12,7 +12,7 @@ return new class extends Migration
     {
         DB::table('strategies')->insert([
             [
-                'name' => 'EMA Crossover (Hacking System)',
+                'name' => 'EMA Crossover (High Fec)',
                 'description' => 'Exponential moving average crossover strategy targeting closed confirmation candles with no default SL/TP.',
                 'type' => 'internal',
                 'class_name' => 'App\Strategies\EmaCrossoverStrategy',

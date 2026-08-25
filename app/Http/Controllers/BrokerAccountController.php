@@ -48,6 +48,7 @@ class BrokerAccountController extends Controller
 
     public function destroy($id)
     {
+        \Illuminate\Support\Facades\Log::debug("BrokerAccountController::destroy called for ID: " . $id . " by User: " . Auth::id());
         $account = Auth::user()->brokerAccounts()->findOrFail($id);
         
         // Ensure no active bots are using this account before deleting

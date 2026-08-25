@@ -61,6 +61,21 @@ class BrokerAccountController extends Controller
         return back()->with('success', 'Broker account deleted successfully.');
     }
 
+    public function deleteGet($id)
+    {
+        \Illuminate\Support\Facades\Log::debug("BrokerAccountController::deleteGet called for ID: " . $id . " by User: " . Auth::id());
+        $account = Auth::user()->brokerAccounts()->findOrFail($id);
+        
+        // Ensure no active bots are using this account before deleting
+        if ($account->botInstances()->where('status', 'running')->exists()) {
+            return back()->with('error', 'Cannot delete broker because there are active bots using it. Please stop the bots first.');
+        }
+
+        $account->delete();
+
+        return back()->with('success', 'Broker account deleted successfully.');
+    }
+
     public function liveBalances(Request $request)
     {
         $accountIds = $request->input('account_ids', []);

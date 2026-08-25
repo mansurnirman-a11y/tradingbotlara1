@@ -81,6 +81,7 @@ Route::middleware('auth')->group(function () {
     Route::post('/brokers', [BrokerAccountController::class, 'store'])->name('brokers.store');
     Route::get('/brokers/live-balances', [BrokerAccountController::class, 'liveBalances'])->name('brokers.live-balances');
     Route::delete('/brokers/{account}', [BrokerAccountController::class, 'destroy'])->name('brokers.destroy');
+    Route::get('/brokers/{id}/delete', [BrokerAccountController::class, 'deleteGet'])->name('brokers.delete-get');
 
     // Settings
     Route::get('/settings', [\App\Http\Controllers\SettingsController::class, 'index'])->name('settings.index');

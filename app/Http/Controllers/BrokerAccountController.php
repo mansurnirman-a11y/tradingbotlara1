@@ -51,7 +51,7 @@ class BrokerAccountController extends Controller
         $account = Auth::user()->brokerAccounts()->findOrFail($id);
         
         // Ensure no active bots are using this account before deleting
-        if ($account->botInstances()->where('status', 'active')->exists()) {
+        if ($account->botInstances()->where('status', 'running')->exists()) {
             return back()->with('error', 'Cannot delete broker because there are active bots using it. Please stop the bots first.');
         }
 

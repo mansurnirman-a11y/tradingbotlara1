@@ -107,8 +107,8 @@ Route::middleware(['role:admin,superadmin'])->group(function () {
     // Strategy Management Routes
     Route::get('/admin/strategies', [App\Http\Controllers\StrategyController::class, 'index'])->name('admin.strategies');
     Route::post('/admin/strategies', [App\Http\Controllers\StrategyController::class, 'store'])->name('admin.strategies.store');
-    Route::post('/admin/strategies/{id}/toggle', [App\Http\Controllers\StrategyController::class, 'toggleActive'])->name('admin.strategies.toggle');
-    Route::delete('/admin/strategies/{id}', [App\Http\Controllers\StrategyController::class, 'destroy'])->name('admin.strategies.destroy');
+    Route::post('/admin/strategies/{strategy}/toggle', [App\Http\Controllers\StrategyController::class, 'toggle'])->name('admin.strategies.toggle');
+    Route::delete('/admin/strategies/{strategy}', [App\Http\Controllers\StrategyController::class, 'destroy'])->name('admin.strategies.destroy');
 
     // TV Import
     Route::get('/admin/import-history', [App\Http\Controllers\AdminController::class, 'showImport'])->name('admin.import');

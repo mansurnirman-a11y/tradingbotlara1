@@ -269,7 +269,7 @@ class BotInstanceController extends Controller
 
     public function destroy(BotInstance $bot)
     {
-        if ($bot->user_id !== Auth::id()) {
+        if ($bot->user_id !== Auth::id() && !Auth::user()->isAdmin()) {
             abort(403);
         }
 

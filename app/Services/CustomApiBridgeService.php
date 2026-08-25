@@ -147,14 +147,47 @@ class CustomApiBridgeService
     public function fetchTicker(string $symbol)
     {
         try {
-            $url = $this->getUrl('ticker');
-            $response = Http::timeout(3)->get($url, [
-                'symbol' => $symbol
-            ]);
+            if ($this->broker === 'oanda') {
+                // Since Oanda backend derives prices from Binance WS, we fetch live price from Binance public API
+                $cleanSymbol = strtoupper(str_replace(['/', '-'], '', $symbol));
+                
+                // Normalise common USD crypto symbols to USDT for Binance query
+                if ($cleanSymbol === 'BTCUSD') $cleanSymbol = 'BTCUSDT';
+                if ($cleanSymbol === 'ETHUSD') $cleanSymbol = 'ETHUSDT';
+                if ($cleanSymbol === 'SOLUSD') $cleanSymbol = 'SOLUSDT';
+                
+                $response = Http::timeout(3)->get("https://api.binance.com/api/v3/ticker/price", [
+                    'symbol' => $cleanSymbol
+                ]);
+                
+                if ($response->successful() && isset($response->json()['price'])) {
+                    return (float)$response->json()['price'];
+                }
+                
+                // If it's a forex pair (e.g. EUR/USD)
+                if (str_contains($symbol, 'USD') || str_contains($symbol, '/')) {
+                    $parts = explode('/', $symbol);
+                    $base = $parts[0] ?? '';
+                    if ($base && $base !== 'USD') {
+                        $forexResponse = Http::timeout(3)->get("https://open.er-api.com/v6/latest/USD");
+                        if ($forexResponse->successful() && isset($forexResponse->json()['rates'][strtoupper($base)])) {
+                            $rate = (float)$forexResponse->json()['rates'][strtoupper($base)];
+                            if ($rate > 0) {
+                                return 1 / $rate;
+                            }
+                        }
+                    }
+                }
+            } else {
+                $url = $this->getUrl('ticker');
+                $response = Http::timeout(3)->get($url, [
+                    'symbol' => $symbol
+                ]);
 
-            if ($response->successful()) {
-                $data = $response->json();
-                return $data['last'] ?? null;
+                if ($response->successful()) {
+                    $data = $response->json();
+                    return $data['last'] ?? null;
+                }
             }
         } catch (\Exception $e) {
             Log::warning("Failed to fetch ticker from custom/localhost API: " . $e->getMessage());

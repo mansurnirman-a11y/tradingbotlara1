@@ -277,4 +277,97 @@ class BotInstanceController extends Controller
 
         return redirect()->route('bots.index')->with('success', 'Bot instance deleted successfully.');
     }
+
+    public function importOanda()
+    {
+        $accounts = Auth::user()->brokerAccounts()
+            ->where('broker', 'oanda')
+            ->where('is_active', true)
+            ->get();
+
+        $importedCount = 0;
+
+        foreach ($accounts as $account) {
+            try {
+                $bridge = new \App\Services\CustomApiBridgeService($account);
+                $positions = $bridge->fetchPositions();
+
+                foreach ($positions as $p) {
+                    $symbol = $p['symbol'];
+                    $amount = (float)$p['amount'];
+                    $entryPrice = (float)$p['averageEntryPrice'];
+                    $createdAt = isset($p['createdAt']) ? \Carbon\Carbon::parse($p['createdAt']) : now();
+
+                    if ($amount == 0) continue;
+
+                    // Try to find a bot instance for this symbol
+                    $bot = Auth::user()->botInstances()
+                        ->where('symbol', $symbol)
+                        ->first();
+
+                    if (!$bot) {
+                        // Find or default strategy
+                        $strategy = \App\Models\Strategy::where('class_name', 'like', '%Ema%')->first() ?? \App\Models\Strategy::first();
+                        
+                        // Create a default bot instance to host this imported trade
+                        $bot = \App\Models\BotInstance::create([
+                            'user_id' => Auth::id(),
+                            'broker_account_id' => $account->id,
+                            'name' => "Imported " . $symbol . " Bot",
+                            'symbol' => $symbol,
+                            'strategy_class' => $strategy->class_name ?? 'App\\Strategies\\EmaCrossoverStrategy',
+                            'timeframe' => '1h',
+                            'allocated_capital' => abs($amount) * $entryPrice,
+                            'max_drawdown_pct' => 5.00,
+                            'parameters' => [
+                                'take_profit_pct' => 3.0,
+                                'stop_loss_pct' => 1.5,
+                            ],
+                            'status' => 'paused',
+                        ]);
+                    }
+
+                    // Check if this bot already has an open position
+                    $hasOpen = $bot->positions()->where('status', 'OPEN')->exists();
+                    if ($hasOpen) continue;
+
+                    // Create the Position record
+                    \App\Models\Position::create([
+                        'bot_instance_id' => $bot->id,
+                        'user_id' => Auth::id(),
+                        'symbol' => $symbol,
+                        'side' => $amount > 0 ? 'LONG' : 'SHORT',
+                        'quantity' => abs($amount),
+                        'entry_price' => $entryPrice,
+                        'status' => 'OPEN',
+                        'opened_at' => $createdAt,
+                    ]);
+
+                    // Create matching trade log in ledger
+                    \App\Models\Trade::create([
+                        'bot_instance_id' => $bot->id,
+                        'user_id' => Auth::id(),
+                        'order_id' => 'IMPORTED-' . strtoupper(uniqid()),
+                        'symbol' => $symbol,
+                        'side' => $amount > 0 ? 'BUY' : 'SELL',
+                        'type' => 'MARKET',
+                        'price' => $entryPrice,
+                        'quantity' => abs($amount),
+                        'status' => 'FILLED',
+                        'executed_at' => $createdAt,
+                    ]);
+
+                    $importedCount++;
+                }
+            } catch (\Exception $e) {
+                \Illuminate\Support\Facades\Log::warning("Failed to import Oanda trades: " . $e->getMessage());
+            }
+        }
+
+        if ($importedCount > 0) {
+            return back()->with('success', "Successfully imported {$importedCount} active trade(s) from Oanda into your bots dashboard!");
+        }
+
+        return back()->with('success', "No new open trades found on Oanda to import.");
+    }
 }

@@ -90,6 +90,7 @@ Route::middleware('auth')->group(function () {
 
     Route::resource('bots', BotInstanceController::class)->except(['show', 'edit', 'update']);
     Route::post('bots/{bot}/toggle', [BotInstanceController::class, 'toggleStatus'])->name('bots.toggle');
+    Route::post('/bots/import-oanda', [BotInstanceController::class, 'importOanda'])->name('bots.import-oanda');
 
     // Notifications
     Route::post('/notifications/{id}/read', [App\Http\Controllers\NotificationController::class, 'markAsRead'])->name('notifications.read');

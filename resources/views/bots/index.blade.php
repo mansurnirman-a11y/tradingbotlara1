@@ -12,7 +12,15 @@
             <h1 style="font-size: 2.5rem; margin: 0;">My <span class="text-gradient">Trading Bots</span></h1>
             <p class="text-secondary">Manage and monitor your automated algorithms</p>
         </div>
-        <a href="{{ route('bots.create') }}" class="btn btn-primary">+ Launch New Bot</a>
+        <div style="display: flex; gap: 1rem; align-items: center;">
+            <form method="POST" action="{{ route('bots.import-oanda') }}" style="margin: 0;">
+                @csrf
+                <button type="submit" class="btn btn-secondary" style="border: 1px solid var(--accent-blue); background: rgba(0, 240, 255, 0.05); color: var(--accent-blue); display: inline-flex; align-items: center; gap: 0.5rem; padding: 0.75rem 1.5rem;" title="Import active manual trades from Oanda Exchange">
+                    🔄 Import Oanda Trades
+                </button>
+            </form>
+            <a href="{{ route('bots.create') }}" class="btn btn-primary">+ Launch New Bot</a>
+        </div>
     </div>
 
     @if(session('success'))

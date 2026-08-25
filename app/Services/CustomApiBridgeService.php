@@ -295,4 +295,23 @@ class CustomApiBridgeService
         // Return empty array on failure so the controller/daemon detects the error properly
         return [];
     }
+
+    /**
+     * Fetch Positions
+     */
+    public function fetchPositions()
+    {
+        try {
+            if ($this->broker === 'oanda') {
+                $url = $this->getUrl('trade/positions');
+                $response = Http::timeout(3)->withHeaders($this->getHeaders())->get($url);
+                if ($response->successful() && is_array($response->json())) {
+                    return $response->json()['positions'] ?? [];
+                }
+            }
+        } catch (\Exception $e) {
+            Log::warning("Failed to fetch Oanda positions: " . $e->getMessage());
+        }
+        return [];
+    }
 }

@@ -48,7 +48,7 @@ class CustomApiBridgeService
         // Mock Fallback
         $candles = [];
         $now = time() * 1000;
-        $basePrice = str_contains($symbol, 'USD') ? 1.1050 : 50000;
+        $basePrice = $this->getMockPrice($symbol);
         for ($i = $limit; $i > 0; $i--) {
             $timestamp = $now - ($i * 15 * 60 * 1000);
             $open = $basePrice + (rand(-10, 10) / 10000);
@@ -91,7 +91,7 @@ class CustomApiBridgeService
             'symbol' => $symbol,
             'side' => strtoupper($side),
             'type' => 'market',
-            'price' => str_contains($symbol, 'USD') ? 1.1050 : 50000,
+            'price' => $this->getMockPrice($symbol),
             'amount' => $amount,
             'status' => 'closed',
             'broker_response' => "Mock order executed via Custom API Bridge ({$this->broker})"
@@ -116,7 +116,25 @@ class CustomApiBridgeService
             Log::warning("Failed to fetch ticker from custom/localhost API: " . $e->getMessage());
         }
 
-        return str_contains($symbol, 'USD') ? 1.1050 : 50000;
+        return $this->getMockPrice($symbol);
+    }
+
+    protected function getMockPrice(string $symbol): float
+    {
+        $lowerSymbol = strtolower($symbol);
+        if (str_contains($lowerSymbol, 'btc')) {
+            return 50000.00;
+        }
+        if (str_contains($lowerSymbol, 'eth')) {
+            return 3000.00;
+        }
+        if (str_contains($lowerSymbol, 'sol')) {
+            return 150.00;
+        }
+        if (str_contains($lowerSymbol, 'usdt') || str_contains($lowerSymbol, 'usdc')) {
+            return 50000.00; // default crypto price
+        }
+        return str_contains($symbol, 'USD') ? 1.1050 : 50000.00;
     }
 
     /**

@@ -38,7 +38,7 @@ class MetaApiBridgeService
         $now = time() * 1000;
         
         // Generate mock candlesticks mimicking Forex/Crypto
-        $basePrice = str_contains($symbol, 'USD') ? 1.1050 : 50000; // EURUSD vs BTC
+        $basePrice = $this->getMockPrice($symbol); // EURUSD vs BTC
         
         for ($i = $limit; $i > 0; $i--) {
             $timestamp = $now - ($i * 15 * 60 * 1000); // subtract 15 mins per candle
@@ -80,10 +80,28 @@ class MetaApiBridgeService
             'symbol' => $symbol,
             'side' => strtoupper($side),
             'type' => 'market',
-            'price' => str_contains($symbol, 'USD') ? 1.1050 : 50000, // mock execution price
+            'price' => $this->getMockPrice($symbol), // mock execution price
             'amount' => $amount,
             'status' => 'closed',
             'broker_response' => "Mock order executed via MetaApi ({$this->platform})"
         ];
+    }
+
+    protected function getMockPrice(string $symbol): float
+    {
+        $lowerSymbol = strtolower($symbol);
+        if (str_contains($lowerSymbol, 'btc')) {
+            return 50000.00;
+        }
+        if (str_contains($lowerSymbol, 'eth')) {
+            return 3000.00;
+        }
+        if (str_contains($lowerSymbol, 'sol')) {
+            return 150.00;
+        }
+        if (str_contains($lowerSymbol, 'usdt') || str_contains($lowerSymbol, 'usdc')) {
+            return 50000.00; // default crypto price
+        }
+        return str_contains($symbol, 'USD') ? 1.1050 : 50000.00;
     }
 }

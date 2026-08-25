@@ -104,9 +104,14 @@
                                 </td>
                                 <td style="padding: 1rem; color: var(--text-secondary);">{{ $acc->created_at->format('M d, Y') }}</td>
                                 <td style="padding: 1rem;">
-                                    <a href="{{ route('brokers.delete-get', $acc->id) }}" class="btn" style="padding: 0.4rem 0.75rem; font-size: 0.85rem; border: 1px solid var(--accent-red); color: var(--accent-red); background: transparent; display: inline-flex; align-items: center; justify-content: center; text-decoration: none;" onclick="return confirm('Are you sure you want to delete this broker account? This action cannot be undone.');" title="Delete Broker">
-                                        <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="pointer-events: none;"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
-                                    </a>
+                                    <div style="display: flex; gap: 0.5rem; align-items: center;">
+                                        <a href="javascript:void(0);" onclick="this.style.display='none'; this.nextElementSibling.style.display='inline-flex';" class="btn" style="padding: 0.4rem 0.75rem; font-size: 0.85rem; border: 1px solid var(--accent-red); color: var(--accent-red); background: transparent; display: inline-flex; align-items: center; justify-content: center;" title="Delete Broker">
+                                            <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="pointer-events: none;"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+                                        </a>
+                                        <a href="{{ route('brokers.delete-get', $acc->id) }}" class="btn" style="display: none; padding: 0.4rem 0.75rem; font-size: 0.85rem; background: var(--accent-red); color: white; border: 1px solid var(--accent-red); text-decoration: none; align-items: center; justify-content: center;" title="Confirm Delete">
+                                            Confirm
+                                        </a>
+                                    </div>
                                 </td>
                             </tr>
                             @endforeach

@@ -128,7 +128,7 @@ class ExchangeService
     public function getContractSize(string $symbol)
     {
         // Use the underlying exchange ID for caching so different accounts on same exchange share cache
-        $exchangeId = $this->isMetaApi ? 'metaapi' : $this->client->id;
+        $exchangeId = $this->isMetaApi ? 'metaapi' : ($this->isCustomApi ? 'customapi' : $this->client->id);
         $cacheKey = "contract_size_{$exchangeId}_{$symbol}";
 
         return \Illuminate\Support\Facades\Cache::remember($cacheKey, 86400, function () use ($symbol) {

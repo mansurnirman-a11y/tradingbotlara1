@@ -112,7 +112,8 @@ class AdminController extends Controller
         
         $output = [];
         $returnVar = 0;
-        exec("cd /var/www/tradingbot && php artisan import:tv-csv " . escapeshellarg($path) . " " . $request->user_id . " 2>&1", $output, $returnVar);
+        $artisan = base_path('artisan');
+        exec("php " . escapeshellarg($artisan) . " import:tv-csv " . escapeshellarg($path) . " " . escapeshellarg($request->user_id) . " 2>&1", $output, $returnVar);
 
         if ($returnVar === 0) {
             return back()->with('success', 'History Imported Successfully! ' . implode('<br>', $output));

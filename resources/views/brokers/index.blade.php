@@ -29,7 +29,14 @@
                         <option value="delta_india">Delta Exchange India</option>
                         <option value="mt4">MetaTrader 4</option>
                         <option value="mt5">MetaTrader 5</option>
+                        <option value="localhost">Localhost API</option>
+                        <option value="custom_api">Custom Broker API</option>
                     </select>
+                </div>
+
+                <div class="form-group" id="bridge-url-group" style="display: none;">
+                    <label class="form-label">API/Bridge URL <span style="color: var(--accent-red);">*</span></label>
+                    <input type="url" name="bridge_url" id="bridge_url" class="form-input" placeholder="e.g. http://localhost:8000 or https://api.custombroker.com">
                 </div>
 
                 <div class="form-group">
@@ -38,13 +45,13 @@
                 </div>
 
                 <div class="form-group">
-                    <label class="form-label">API Key</label>
-                    <input type="password" name="api_key" class="form-input" required placeholder="Paste your API Key">
+                    <label class="form-label">API Key <span class="api-key-required" style="color: var(--accent-red);">*</span></label>
+                    <input type="password" name="api_key" id="api_key" class="form-input" placeholder="Paste your API Key">
                 </div>
 
                 <div class="form-group" style="margin-bottom: 2rem;">
-                    <label class="form-label">API Secret</label>
-                    <input type="password" name="api_secret" class="form-input" required placeholder="Paste your API Secret">
+                    <label class="form-label">API Secret <span class="api-secret-required" style="color: var(--accent-red);">*</span></label>
+                    <input type="password" name="api_secret" id="api_secret" class="form-input" placeholder="Paste your API Secret">
                 </div>
 
                 <button type="submit" class="btn btn-primary" style="width: 100%;">Connect Account</button>
@@ -194,5 +201,48 @@
     });
     </script>
     @endif
+
+    <script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const brokerSelect = document.querySelector('select[name="broker"]');
+        const bridgeUrlGroup = document.getElementById('bridge-url-group');
+        const bridgeUrlInput = document.getElementById('bridge_url');
+        const apiKeyInput = document.getElementById('api_key');
+        const apiSecretInput = document.getElementById('api_secret');
+        const apiKeyRequiredStar = document.querySelector('.api-key-required');
+        const apiSecretRequiredStar = document.querySelector('.api-secret-required');
+
+        function toggleBrokerFields() {
+            const val = brokerSelect.value;
+            if (['mt4', 'mt5', 'localhost', 'custom_api'].includes(val)) {
+                bridgeUrlGroup.style.display = 'block';
+                bridgeUrlInput.setAttribute('required', 'required');
+            } else {
+                bridgeUrlGroup.style.display = 'none';
+                bridgeUrlInput.removeAttribute('required');
+                bridgeUrlInput.value = '';
+            }
+
+            if (['localhost', 'custom_api'].includes(val)) {
+                // Key/Secret are optional for local/custom connections
+                apiKeyInput.removeAttribute('required');
+                apiSecretInput.removeAttribute('required');
+                if (apiKeyRequiredStar) apiKeyRequiredStar.style.display = 'none';
+                if (apiSecretRequiredStar) apiSecretRequiredStar.style.display = 'none';
+            } else {
+                // Required for binance, delta_india, mt4, mt5
+                apiKeyInput.setAttribute('required', 'required');
+                apiSecretInput.setAttribute('required', 'required');
+                if (apiKeyRequiredStar) apiKeyRequiredStar.style.display = 'inline';
+                if (apiSecretRequiredStar) apiSecretRequiredStar.style.display = 'inline';
+            }
+        }
+
+        if (brokerSelect) {
+            brokerSelect.addEventListener('change', toggleBrokerFields);
+            toggleBrokerFields(); // Run on load
+        }
+    });
+    </script>
 </div>
 @endsection

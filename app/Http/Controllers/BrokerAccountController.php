@@ -23,10 +23,11 @@ class BrokerAccountController extends Controller
     public function store(Request $request)
     {
         $validated = $request->validate([
-            'broker' => 'required|in:binance,delta_india,mt4,mt5',
+            'broker' => 'required|in:binance,delta_india,mt4,mt5,localhost,custom_api',
             'account_label' => 'required|string|max:100',
-            'api_key' => 'required|string',
-            'api_secret' => 'required|string',
+            'api_key' => 'nullable|string|required_unless:broker,localhost,custom_api',
+            'api_secret' => 'nullable|string|required_unless:broker,localhost,custom_api',
+            'bridge_url' => 'nullable|url|required_if:broker,localhost,custom_api,mt4,mt5',
         ]);
 
         // In a real scenario, we would inject CCXT here and ping the API to verify the keys are valid before saving.
@@ -36,8 +37,9 @@ class BrokerAccountController extends Controller
             'user_id' => Auth::id(),
             'broker' => $validated['broker'],
             'account_label' => $validated['account_label'],
-            'api_key' => $validated['api_key'], // Automatically encrypted by Model cast
-            'api_secret' => $validated['api_secret'], // Automatically encrypted by Model cast
+            'api_key' => $validated['api_key'] ?? null, // Automatically encrypted by Model cast
+            'api_secret' => $validated['api_secret'] ?? null, // Automatically encrypted by Model cast
+            'bridge_url' => $validated['bridge_url'] ?? null,
             'is_active' => true,
         ]);
 

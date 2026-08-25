@@ -9,6 +9,7 @@ class ExchangeService
 {
     protected $client;
     protected $isMetaApi = false;
+    protected $isCustomApi = false;
 
     public function __construct(BrokerAccount $account)
     {
@@ -16,6 +17,10 @@ class ExchangeService
             // Route to MetaApi Bridge for MetaTrader
             $this->client = new MetaApiBridgeService($account);
             $this->isMetaApi = true;
+        } elseif (in_array($account->broker, ['localhost', 'custom_api'])) {
+            // Route to Custom API Bridge
+            $this->client = new CustomApiBridgeService($account);
+            $this->isCustomApi = true;
         } else {
             // Route to CCXT for Crypto Exchanges
             $brokerName = $account->broker;
@@ -56,7 +61,7 @@ class ExchangeService
 
     public function fetchOHLCV(string $symbol, string $timeframe = '15m', int $limit = 100)
     {
-        if ($this->isMetaApi) {
+        if ($this->isMetaApi || $this->isCustomApi) {
             return $this->client->fetchOHLCV($symbol, $timeframe, $limit);
         }
 
@@ -65,7 +70,7 @@ class ExchangeService
 
     public function createMarketOrder(string $symbol, string $side, float $amount)
     {
-        if ($this->isMetaApi) {
+        if ($this->isMetaApi || $this->isCustomApi) {
             return $this->client->createMarketOrder($symbol, $side, $amount);
         }
 
@@ -75,8 +80,8 @@ class ExchangeService
 
     public function formatAmount(string $symbol, float $amount)
     {
-        if ($this->isMetaApi) {
-            return round($amount, 2); // Default to 2 decimals for MT4/MT5 lots
+        if ($this->isMetaApi || $this->isCustomApi) {
+            return round($amount, 4); // Default to 4 decimals for custom/localhost lots
         }
         
         try {
@@ -96,6 +101,9 @@ class ExchangeService
                 // MetaApi might not have a simple fetchTicker in our bridge, return null for now
                 return null;
             }
+            if ($this->isCustomApi) {
+                return $this->client->fetchTicker($symbol);
+            }
             $ticker = $this->client->fetch_ticker($symbol);
             return $ticker['last'] ?? null;
         } catch (\Exception $e) {
@@ -107,7 +115,7 @@ class ExchangeService
     public function getMarketInfo(string $symbol)
     {
         try {
-            if ($this->isMetaApi) return null;
+            if ($this->isMetaApi || $this->isCustomApi) return null;
             if (!$this->client->markets) {
                 $this->client->load_markets();
             }
@@ -147,6 +155,9 @@ class ExchangeService
             if ($this->isMetaApi) {
                 // MetaApi implementation if supported, else return empty
                 return ['USDT' => ['free' => 0, 'used' => 0, 'total' => 0]];
+            }
+            if ($this->isCustomApi) {
+                return $this->client->fetchBalance();
             }
 
             $balance = $this->client->fetch_balance();

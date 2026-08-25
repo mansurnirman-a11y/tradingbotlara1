@@ -15,6 +15,22 @@
         </div>
     @endif
 
+    @if(session('error'))
+        <div class="alert" style="background: rgba(255, 61, 0, 0.1); color: var(--accent-red); border: 1px solid rgba(255, 61, 0, 0.2); margin-bottom: 1rem; padding: 1rem; border-radius: var(--radius-md);">
+            {{ session('error') }}
+        </div>
+    @endif
+
+    @if($errors->any())
+        <div class="alert" style="background: rgba(255, 61, 0, 0.1); color: var(--accent-red); border: 1px solid rgba(255, 61, 0, 0.2); margin-bottom: 1rem; padding: 1rem; border-radius: var(--radius-md);">
+            <ul style="margin: 0; padding-left: 1.5rem;">
+                @foreach($errors->all() as $err)
+                    <li>{{ $err }}</li>
+                @endforeach
+            </ul>
+        </div>
+    @endif
+
     <div style="display: grid; grid-template-columns: 1fr 2fr; gap: 2rem;">
         <!-- Add Broker Account Form -->
         <div class="glass-panel" style="padding: 2rem;">

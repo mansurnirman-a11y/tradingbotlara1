@@ -314,4 +314,28 @@ class CustomApiBridgeService
         }
         return [];
     }
+
+    /**
+     * Fetch positions in CCXT format (snake_case alias for compatibility)
+     */
+    public function fetch_positions()
+    {
+        $positions = $this->fetchPositions();
+        $formatted = [];
+        foreach ($positions as $p) {
+            $tickerPrice = $this->fetchTicker($p['symbol']) ?? (float)$p['averageEntryPrice'];
+            $entry = (float)$p['averageEntryPrice'];
+            $amount = (float)$p['amount'];
+            $pnl = ($tickerPrice - $entry) * $amount;
+            
+            $formatted[] = [
+                'symbol' => $p['symbol'],
+                'contracts' => $amount,
+                'entryPrice' => $entry,
+                'markPrice' => $tickerPrice,
+                'unrealizedPnl' => $pnl,
+            ];
+        }
+        return $formatted;
+    }
 }

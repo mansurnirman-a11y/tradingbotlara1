@@ -17,7 +17,7 @@ class ExchangeService
             // Route to MetaApi Bridge for MetaTrader
             $this->client = new MetaApiBridgeService($account);
             $this->isMetaApi = true;
-        } elseif (in_array($account->broker, ['localhost', 'custom_api'])) {
+        } elseif (in_array($account->broker, ['oanda', 'custom_api'])) {
             // Route to Custom API Bridge
             $this->client = new CustomApiBridgeService($account);
             $this->isCustomApi = true;

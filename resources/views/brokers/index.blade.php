@@ -29,7 +29,7 @@
                         <option value="delta_india">Delta Exchange India</option>
                         <option value="mt4">MetaTrader 4</option>
                         <option value="mt5">MetaTrader 5</option>
-                        <option value="localhost">Localhost API</option>
+                        <option value="oanda">Oanda</option>
                         <option value="custom_api">Custom Broker API</option>
                     </select>
                 </div>
@@ -214,7 +214,7 @@
 
         function toggleBrokerFields() {
             const val = brokerSelect.value;
-            if (['mt4', 'mt5', 'localhost', 'custom_api'].includes(val)) {
+            if (['mt4', 'mt5', 'oanda', 'custom_api'].includes(val)) {
                 bridgeUrlGroup.style.display = 'block';
                 bridgeUrlInput.setAttribute('required', 'required');
             } else {
@@ -223,7 +223,7 @@
                 bridgeUrlInput.value = '';
             }
 
-            if (['localhost', 'custom_api'].includes(val)) {
+            if (['oanda', 'custom_api'].includes(val)) {
                 // Key/Secret are optional for local/custom connections
                 apiKeyInput.removeAttribute('required');
                 apiSecretInput.removeAttribute('required');

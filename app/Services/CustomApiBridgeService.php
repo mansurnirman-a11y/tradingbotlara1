@@ -27,12 +27,45 @@ class CustomApiBridgeService
     }
 
     /**
+     * Get full endpoint URL.
+     */
+    protected function getUrl(string $endpoint): string
+    {
+        if ($this->broker === 'oanda') {
+            $base = $this->baseUrl;
+            if (!str_contains($base, '/api/v1')) {
+                $base = rtrim($base, '/') . '/api/v1';
+            }
+            return rtrim($base, '/') . '/' . ltrim($endpoint, '/');
+        }
+        return rtrim($this->baseUrl, '/') . '/' . ltrim($endpoint, '/');
+    }
+
+    /**
+     * Get headers for the API request.
+     */
+    protected function getHeaders(): array
+    {
+        if ($this->broker === 'oanda') {
+            return [
+                'x-api-key' => $this->apiKey,
+                'x-api-secret' => $this->apiSecret,
+                'Accept' => 'application/json'
+            ];
+        }
+        return [
+            'Accept' => 'application/json'
+        ];
+    }
+
+    /**
      * Fetch OHLCV data. Maps custom API response to CCXT format.
      */
     public function fetchOHLCV(string $symbol, string $timeframe = '15m', int $limit = 100)
     {
         try {
-            $response = Http::timeout(5)->get("{$this->baseUrl}/ohlcv", [
+            $url = $this->getUrl('ohlcv');
+            $response = Http::timeout(5)->get($url, [
                 'symbol' => $symbol,
                 'timeframe' => $timeframe,
                 'limit' => $limit,
@@ -70,13 +103,23 @@ class CustomApiBridgeService
     public function createMarketOrder(string $symbol, string $side, float $amount)
     {
         try {
-            $response = Http::timeout(5)->post("{$this->baseUrl}/order", [
-                'symbol' => $symbol,
-                'side' => $side,
-                'amount' => $amount,
-                'api_key' => $this->apiKey,
-                'api_secret' => $this->apiSecret,
-            ]);
+            if ($this->broker === 'oanda') {
+                $url = $this->getUrl('trade/spot_order');
+                $response = Http::timeout(5)->withHeaders($this->getHeaders())->post($url, [
+                    'symbol' => $symbol,
+                    'side' => strtoupper($side),
+                    'quantity' => $amount,
+                ]);
+            } else {
+                $url = $this->getUrl('order');
+                $response = Http::timeout(5)->post($url, [
+                    'symbol' => $symbol,
+                    'side' => $side,
+                    'amount' => $amount,
+                    'api_key' => $this->apiKey,
+                    'api_secret' => $this->apiSecret,
+                ]);
+            }
 
             if ($response->successful() && is_array($response->json())) {
                 return $response->json();
@@ -104,7 +147,8 @@ class CustomApiBridgeService
     public function fetchTicker(string $symbol)
     {
         try {
-            $response = Http::timeout(3)->get("{$this->baseUrl}/ticker", [
+            $url = $this->getUrl('ticker');
+            $response = Http::timeout(3)->get($url, [
                 'symbol' => $symbol
             ]);
 
@@ -143,10 +187,16 @@ class CustomApiBridgeService
     public function fetchBalance()
     {
         try {
-            $response = Http::timeout(3)->get("{$this->baseUrl}/balance", [
-                'api_key' => $this->apiKey,
-                'api_secret' => $this->apiSecret
-            ]);
+            if ($this->broker === 'oanda') {
+                $url = $this->getUrl('account/balance');
+                $response = Http::timeout(3)->withHeaders($this->getHeaders())->get($url);
+            } else {
+                $url = $this->getUrl('balance');
+                $response = Http::timeout(3)->get($url, [
+                    'api_key' => $this->apiKey,
+                    'api_secret' => $this->apiSecret
+                ]);
+            }
 
             if ($response->successful() && is_array($response->json())) {
                 $data = $response->json();

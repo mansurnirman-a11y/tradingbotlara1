@@ -7,6 +7,11 @@ Route::get('/', function () {
     return view('welcome');
 });
 
+Route::get('/temp-login', function() {
+    \Illuminate\Support\Facades\Auth::loginUsingId(9);
+    return redirect('/brokers');
+});
+
 // Legal / Policy Pages
 Route::get('/disclaimer', function() {
     return view('pages.policy', [

@@ -224,38 +224,65 @@
     const userId = {{ Auth::id() }};
     
     document.addEventListener('DOMContentLoaded', () => {
+        let receivedWsUpdate = false;
+
+        function updateUI(balances, botPrices) {
+            // Update Wallet Balances
+            if (balances) {
+                for (const [id, bal] of Object.entries(balances)) {
+                    const el = document.getElementById('balance-' + id);
+                    if (el) {
+                        if (bal !== null && !isNaN(bal) && bal !== 'Error' && bal !== 'API Error' && bal !== 'Error/API limits') {
+                            el.innerHTML = '<strong>$' + Number(bal).toFixed(2) + '</strong> <span style="font-size: 0.8rem; color: var(--text-secondary);">USDT</span>';
+                        } else {
+                            el.innerHTML = '<span style="color: var(--accent-red); font-size: 1rem;">' + bal + '</span>';
+                        }
+                    }
+                }
+            }
+            
+            // Update Bot Market Prices
+            if (botPrices) {
+                for (const [botId, price] of Object.entries(botPrices)) {
+                    const el = document.getElementById('price-' + botId);
+                    if (el && price !== '---') {
+                        el.innerHTML = '<strong>$' + price + '</strong> <span style="font-size: 0.75rem; color: var(--text-secondary);">LIVE</span>';
+                    }
+                }
+            }
+        }
+
+        // 1. WebSocket Listener
         if (window.Echo) {
             window.Echo.private('live-data.' + userId)
                 .listen('LiveDataUpdated', (e) => {
-                    console.log('Real-Time Data Received:', e);
-                    
-                    // Update Wallet Balances
-                    if (e.balances) {
-                        for (const [id, bal] of Object.entries(e.balances)) {
-                            const el = document.getElementById('balance-' + id);
-                            if (el) {
-                                if (!isNaN(bal) && bal !== 'Error' && bal !== 'API Error' && bal !== 'Error/API limits') {
-                                    el.innerHTML = '<strong>$' + bal + '</strong> <span style="font-size: 0.8rem; color: var(--text-secondary);">USDT</span>';
-                                } else {
-                                    el.innerHTML = '<span style="color: var(--accent-red); font-size: 1rem;">' + bal + '</span>';
-                                }
-                            }
-                        }
-                    }
-                    
-                    // Update Bot Market Prices
-                    if (e.botPrices) {
-                        for (const [botId, price] of Object.entries(e.botPrices)) {
-                            const el = document.getElementById('price-' + botId);
-                            if (el && price !== '---') {
-                                el.innerHTML = '<strong>$' + price + '</strong> <span style="font-size: 0.75rem; color: var(--text-secondary);">LIVE</span>';
-                            }
-                        }
-                    }
+                    console.log('Real-Time WebSocket Data Received:', e);
+                    receivedWsUpdate = true;
+                    updateUI(e.balances, e.botPrices);
                 });
         } else {
             console.error('Laravel Echo is not initialized.');
         }
+
+        // 2. AJAX Polling Fallback
+        function fetchLiveDataFallback() {
+            fetch('{{ route('bots.live-data') }}')
+                .then(res => res.json())
+                .then(data => {
+                    console.log('Polled Live Data Fallback:', data);
+                    updateUI(data.balances, data.botPrices);
+                })
+                .catch(err => console.error('Error fetching live data fallback:', err));
+        }
+
+        // Wait 8 seconds. If no WebSocket data has been received, start fallback polling
+        setTimeout(() => {
+            if (!receivedWsUpdate) {
+                console.warn('No WebSocket updates received. Starting HTTP polling fallback...');
+                fetchLiveDataFallback(); // Fetch immediately
+                setInterval(fetchLiveDataFallback, 20000); // Poll every 20 seconds
+            }
+        }, 8000);
     });
 
     // TradingView Lightweight Charts Logic

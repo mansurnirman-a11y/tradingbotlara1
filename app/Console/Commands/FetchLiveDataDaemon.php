@@ -35,7 +35,7 @@ class FetchLiveDataDaemon extends Command
             $users = User::with(['brokerAccounts' => function($q) {
                 $q->where('is_active', true);
             }, 'botInstances' => function($q) {
-                $q->where('status', 'active');
+                $q->where('status', 'running');
             }])->get();
 
             foreach ($users as $user) {

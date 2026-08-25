@@ -149,19 +149,67 @@ class CustomApiBridgeService
             ]);
 
             if ($response->successful() && is_array($response->json())) {
-                return $response->json();
+                $data = $response->json();
+                
+                // --- Normalize Response Formats ---
+                
+                // Case 1: Simple numeric string or float (e.g. 5000.50 or "5000.50")
+                if (is_numeric($data)) {
+                    return [
+                        'USD' => [
+                            'free' => (float)$data,
+                            'used' => 0.0,
+                            'total' => (float)$data
+                        ]
+                    ];
+                }
+                
+                // Case 2: Simple key-value containing balance: e.g. {"balance": 5000.50, "currency": "USD"}
+                if (isset($data['balance'])) {
+                    $currency = $data['currency'] ?? 'USD';
+                    return [
+                        $currency => [
+                            'free' => (float)$data['balance'],
+                            'used' => 0.0,
+                            'total' => (float)$data['balance']
+                        ]
+                    ];
+                }
+                
+                // Case 3: Already standard CCXT nested structure: e.g. {"USD": {"free": 5000}} or {"USDT": {"free": 5000}}
+                if (isset($data['USD']['free']) || isset($data['USDT']['free']) || isset($data['USD']['total']) || isset($data['USDT']['total'])) {
+                    return $data;
+                }
+                
+                // Case 4: Flat dictionary: e.g. {"USD": 5000.50, "USDT": 100.00}
+                $normalized = [];
+                foreach ($data as $asset => $val) {
+                    if (is_numeric($val)) {
+                        $normalized[$asset] = [
+                            'free' => (float)$val,
+                            'used' => 0.0,
+                            'total' => (float)$val
+                        ];
+                    } elseif (is_array($val) && (isset($val['free']) || isset($val['total']))) {
+                        $normalized[$asset] = [
+                            'free' => (float)($val['free'] ?? $val['total'] ?? 0),
+                            'used' => (float)($val['used'] ?? 0),
+                            'total' => (float)($val['total'] ?? $val['free'] ?? 0)
+                        ];
+                    }
+                }
+                
+                if (!empty($normalized)) {
+                    return $normalized;
+                }
+
+                return $data;
             }
         } catch (\Exception $e) {
             Log::warning("Failed to fetch balance from custom/localhost API: " . $e->getMessage());
         }
 
-        // Return a mock default balance
-        return [
-            'USDT' => [
-                'free' => 10000.00,
-                'used' => 0.00,
-                'total' => 10000.00
-            ]
-        ];
+        // Return empty array on failure so the controller/daemon detects the error properly
+        return [];
     }
 }

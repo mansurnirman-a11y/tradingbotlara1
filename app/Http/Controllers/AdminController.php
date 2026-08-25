@@ -83,13 +83,14 @@ class AdminController extends Controller
     public function updateUser(Request $request, User $user)
     {
         $request->validate([
-            'role' => 'required|in:user,admin,superadmin',
+            'role' => 'nullable|in:user,admin,superadmin',
             'max_bots' => 'required|integer|min:0',
+            'is_active' => 'required|in:0,1',
         ]);
 
         $user->update([
-            'role' => $request->role,
-            'is_active' => $request->has('is_active'),
+            'role' => $request->role ?? $user->role,
+            'is_active' => $request->is_active == '1',
             'max_bots' => $request->max_bots,
         ]);
 

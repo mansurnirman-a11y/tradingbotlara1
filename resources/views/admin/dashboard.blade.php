@@ -35,6 +35,14 @@
         </div>
     @endif
 
+    @if($errors->any())
+        <div class="alert" style="background: rgba(255, 61, 0, 0.1); color: var(--accent-red); border: 1px solid rgba(255, 61, 0, 0.5); font-weight: bold; text-align: center; padding: 1.5rem; font-size: 1.2rem; margin-top: 1rem;">
+            @foreach($errors->all() as $error)
+                <div>{{ $error }}</div>
+            @endforeach
+        </div>
+    @endif
+
     <!-- Platform Stats Grid -->
     <h3 style="margin-bottom: 1rem; padding-bottom: 0.5rem; border-bottom: 1px solid var(--border-glass);">Platform Overview</h3>
     <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1.5rem; margin-bottom: 2rem;">

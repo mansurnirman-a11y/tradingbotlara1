@@ -12,7 +12,7 @@ class TradeController extends Controller
 {
     public function index()
     {
-        $query = Position::with(['botInstance.brokerAccount', 'user'])->orderBy('created_at', 'desc');
+        $query = Position::with(['botInstance.brokerAccount', 'user'])->orderBy('opened_at', 'desc');
 
         if (!in_array(Auth::user()->role, ['admin', 'superadmin'])) {
             $query->where('user_id', Auth::id());

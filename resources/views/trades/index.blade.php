@@ -44,9 +44,6 @@
                         <tr style="border-bottom: 1px solid rgba(255,255,255,0.02);">
                             <td style="padding: 1rem; color: var(--text-secondary); font-size: 0.875rem;">{{ $position->opened_at->format('M d, H:i') }}</td>
                             <td style="padding: 1rem; font-family: monospace;">
-                                @if(in_array(Auth::user()->role, ['admin', 'superadmin']))
-                                    <div style="font-family: var(--font-sans); font-size: 0.8rem; font-weight: bold; margin-bottom: 2px;">{{ $position->user->name ?? 'Unknown' }}</div>
-                                @endif
                                 <span title="{{ $position->botInstance->brokerAccount->account_label ?? 'Deleted Bot' }}">
                                     #{{ str_pad($position->bot_instance_id, 4, '0', STR_PAD_LEFT) }}
                                 </span>

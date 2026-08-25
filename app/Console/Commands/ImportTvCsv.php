@@ -55,11 +55,16 @@ class ImportTvCsv extends Command
 
             $tradeNum = $row[0];
             $type = $row[1]; // "Entry short", "Exit short", "Entry long", "Exit long"
-            $datetime = $row[2];
+            $datetime = trim($row[2]);
             $price = $row[4];
             $qty = $row[5];
             $value = $row[6];
             $pnl = $row[7]; // usually only filled on Exit row
+
+            // Skip open trades or empty datetimes
+            if (empty($datetime) || strtolower($datetime) === 'open') {
+                continue;
+            }
 
             if (!isset($tradesByNum[$tradeNum])) {
                 $tradesByNum[$tradeNum] = ['entry' => null, 'exit' => null];
@@ -88,59 +93,66 @@ class ImportTvCsv extends Command
         foreach ($tradesByNum as $num => $data) {
             if (!$data['entry'] || !$data['exit']) continue;
 
-            $entry = $data['entry'];
-            $exit = $data['exit'];
+            try {
+                $entry = $data['entry'];
+                $exit = $data['exit'];
 
-            $entrySide = $entry['side'];
-            $exitSide = $entrySide === 'LONG' ? 'SELL' : 'BUY';
-            $tradeEntrySide = $entrySide === 'LONG' ? 'BUY' : 'SELL';
+                $entrySide = $entry['side'];
+                $exitSide = $entrySide === 'LONG' ? 'SELL' : 'BUY';
+                $tradeEntrySide = $entrySide === 'LONG' ? 'BUY' : 'SELL';
 
-            // Create Entry Trade
-            \App\Models\Trade::create([
-                'bot_instance_id' => $bot->id,
-                'user_id' => $user->id,
-                'order_id' => 'TV-SIM-EN-' . uniqid(),
-                'symbol' => 'BTC/USD',
-                'side' => $tradeEntrySide,
-                'type' => 'MARKET',
-                'price' => floatval($entry['price']),
-                'quantity' => floatval($entry['qty']),
-                'volume_usd' => floatval($entry['value']),
-                'status' => 'FILLED',
-                'executed_at' => \Carbon\Carbon::parse($entry['datetime']),
-            ]);
+                $openedAt = \Carbon\Carbon::parse($entry['datetime']);
+                $closedAt = \Carbon\Carbon::parse($exit['datetime']);
 
-            // Create Exit Trade
-            \App\Models\Trade::create([
-                'bot_instance_id' => $bot->id,
-                'user_id' => $user->id,
-                'order_id' => 'TV-SIM-EX-' . uniqid(),
-                'symbol' => 'BTC/USD',
-                'side' => $exitSide,
-                'type' => 'MARKET',
-                'price' => floatval($exit['price']),
-                'quantity' => floatval($entry['qty']),
-                'volume_usd' => floatval($entry['qty']) * floatval($exit['price']),
-                'status' => 'FILLED',
-                'executed_at' => \Carbon\Carbon::parse($exit['datetime']),
-            ]);
+                // Create Entry Trade
+                \App\Models\Trade::create([
+                    'bot_instance_id' => $bot->id,
+                    'user_id' => $user->id,
+                    'order_id' => 'TV-SIM-EN-' . uniqid(),
+                    'symbol' => 'BTC/USD',
+                    'side' => $tradeEntrySide,
+                    'type' => 'MARKET',
+                    'price' => floatval($entry['price']),
+                    'quantity' => floatval($entry['qty']),
+                    'volume_usd' => floatval($entry['value']),
+                    'status' => 'FILLED',
+                    'executed_at' => $openedAt,
+                ]);
 
-            // Create Closed Position
-            \App\Models\Position::create([
-                'bot_instance_id' => $bot->id,
-                'user_id' => $user->id,
-                'symbol' => 'BTC/USD',
-                'side' => $entrySide,
-                'quantity' => floatval($entry['qty']),
-                'entry_price' => floatval($entry['price']),
-                'exit_price' => floatval($exit['price']),
-                'status' => 'CLOSED',
-                'realized_pnl' => floatval($exit['pnl']),
-                'opened_at' => \Carbon\Carbon::parse($entry['datetime']),
-                'closed_at' => \Carbon\Carbon::parse($exit['datetime']),
-            ]);
+                // Create Exit Trade
+                \App\Models\Trade::create([
+                    'bot_instance_id' => $bot->id,
+                    'user_id' => $user->id,
+                    'order_id' => 'TV-SIM-EX-' . uniqid(),
+                    'symbol' => 'BTC/USD',
+                    'side' => $exitSide,
+                    'type' => 'MARKET',
+                    'price' => floatval($exit['price']),
+                    'quantity' => floatval($entry['qty']),
+                    'volume_usd' => floatval($entry['qty']) * floatval($exit['price']),
+                    'status' => 'FILLED',
+                    'executed_at' => $closedAt,
+                ]);
 
-            $positionsCreated++;
+                // Create Closed Position
+                \App\Models\Position::create([
+                    'bot_instance_id' => $bot->id,
+                    'user_id' => $user->id,
+                    'symbol' => 'BTC/USD',
+                    'side' => $entrySide,
+                    'quantity' => floatval($entry['qty']),
+                    'entry_price' => floatval($entry['price']),
+                    'exit_price' => floatval($exit['price']),
+                    'status' => 'CLOSED',
+                    'realized_pnl' => floatval($exit['pnl']),
+                    'opened_at' => $openedAt,
+                    'closed_at' => $closedAt,
+                ]);
+
+                $positionsCreated++;
+            } catch (\Exception $e) {
+                $this->warn("Failed to parse trade #{$num}: " . $e->getMessage());
+            }
         }
 
         $this->info("Successfully imported {$positionsCreated} historical positions for User {$user->name}.");

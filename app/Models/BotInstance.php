@@ -48,4 +48,9 @@ class BotInstance extends Model
     {
         return $this->hasMany(Trade::class);
     }
+
+    public function positions()
+    {
+        return $this->hasMany(Position::class);
+    }
 }

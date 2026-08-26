@@ -64,15 +64,44 @@ class CustomApiBridgeService
     public function fetchOHLCV(string $symbol, string $timeframe = '15m', int $limit = 100)
     {
         try {
-            $url = $this->getUrl('ohlcv');
-            $response = Http::timeout(5)->get($url, [
-                'symbol' => $symbol,
-                'timeframe' => $timeframe,
-                'limit' => $limit,
-            ]);
+            if ($this->broker === 'oanda') {
+                // Fetch real live OHLCV candles from Binance public API
+                $cleanSymbol = strtoupper(str_replace(['/', '-'], '', $symbol));
+                if ($cleanSymbol === 'BTCUSD') $cleanSymbol = 'BTCUSDT';
+                if ($cleanSymbol === 'ETHUSD') $cleanSymbol = 'ETHUSDT';
+                if ($cleanSymbol === 'SOLUSD') $cleanSymbol = 'SOLUSDT';
 
-            if ($response->successful() && is_array($response->json())) {
-                return $response->json();
+                $response = Http::timeout(5)->get("https://api.binance.com/api/v3/klines", [
+                    'symbol' => $cleanSymbol,
+                    'interval' => $timeframe,
+                    'limit' => $limit,
+                ]);
+
+                if ($response->successful() && is_array($response->json())) {
+                    $candles = [];
+                    foreach ($response->json() as $kline) {
+                        $candles[] = [
+                            (int)$kline[0],       // timestamp
+                            (float)$kline[1],     // open
+                            (float)$kline[2],     // high
+                            (float)$kline[3],     // low
+                            (float)$kline[4],     // close
+                            (float)$kline[5],     // volume
+                        ];
+                    }
+                    return $candles;
+                }
+            } else {
+                $url = $this->getUrl('ohlcv');
+                $response = Http::timeout(5)->get($url, [
+                    'symbol' => $symbol,
+                    'timeframe' => $timeframe,
+                    'limit' => $limit,
+                ]);
+
+                if ($response->successful() && is_array($response->json())) {
+                    return $response->json();
+                }
             }
         } catch (\Exception $e) {
             Log::warning("Failed to fetch custom/localhost OHLCV, using mock fallback: " . $e->getMessage());

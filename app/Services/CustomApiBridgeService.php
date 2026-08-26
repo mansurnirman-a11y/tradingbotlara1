@@ -330,16 +330,13 @@ class CustomApiBridgeService
      */
     public function fetchPositions()
     {
-        try {
-            if ($this->broker === 'oanda') {
-                $url = $this->getUrl('trade/positions');
-                $response = Http::timeout(3)->withHeaders($this->getHeaders())->get($url);
-                if ($response->successful() && is_array($response->json())) {
-                    return $response->json()['positions'] ?? [];
-                }
+        if ($this->broker === 'oanda') {
+            $url = $this->getUrl('trade/positions');
+            $response = Http::timeout(5)->withHeaders($this->getHeaders())->get($url);
+            if ($response->successful() && is_array($response->json())) {
+                return $response->json()['positions'] ?? [];
             }
-        } catch (\Exception $e) {
-            Log::warning("Failed to fetch Oanda positions: " . $e->getMessage());
+            throw new Exception("Failed to fetch Oanda positions: API returned status " . $response->status());
         }
         return [];
     }

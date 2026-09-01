@@ -251,4 +251,43 @@ class ExchangeService
             return [];
         }
     }
+
+    public function getAvailableBalance(): float
+    {
+        $balanceData = $this->fetchBalance();
+        if (empty($balanceData)) {
+            return 0.0;
+        }
+
+        // 1. MetaApi / MT5 structure (equity or free/total USD)
+        if (isset($balanceData['equity']) && is_numeric($balanceData['equity']) && $balanceData['equity'] > 0) {
+            return floatval($balanceData['equity']);
+        }
+        if (isset($balanceData['free']['USD']) && is_numeric($balanceData['free']['USD'])) {
+            return floatval($balanceData['free']['USD']);
+        }
+        if (isset($balanceData['total']['USD']) && is_numeric($balanceData['total']['USD'])) {
+            return floatval($balanceData['total']['USD']);
+        }
+
+        // 2. CCXT standard format
+        if (isset($balanceData['USDT']['free']) || isset($balanceData['USD']['free'])) {
+            return floatval($balanceData['USDT']['free'] ?? 0) + floatval($balanceData['USD']['free'] ?? 0);
+        }
+        if (isset($balanceData['total']['USDT']) || isset($balanceData['total']['USD'])) {
+            return floatval($balanceData['total']['USDT'] ?? 0) + floatval($balanceData['total']['USD'] ?? 0);
+        }
+        if (isset($balanceData['free']['USDT']) && is_numeric($balanceData['free']['USDT'])) {
+            return floatval($balanceData['free']['USDT']);
+        }
+
+        // 3. Any positive currency
+        foreach (['USDT', 'USD', 'INR', 'BTC', 'ETH'] as $curr) {
+            if (isset($balanceData[$curr]['free']) && is_numeric($balanceData[$curr]['free']) && $balanceData[$curr]['free'] > 0) {
+                return floatval($balanceData[$curr]['free']);
+            }
+        }
+
+        return 0.0;
+    }
 }

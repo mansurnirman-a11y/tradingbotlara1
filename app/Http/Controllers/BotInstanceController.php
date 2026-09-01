@@ -25,18 +25,9 @@ class BotInstanceController extends Controller
         foreach ($accounts as $account) {
             try {
                 $exchange = new \App\Services\ExchangeService($account);
-                $balanceData = $exchange->fetchBalance();
-                
-                if (empty($balanceData)) {
-                    $balances[$account->id] = 'API Error/Blocked';
-                } else {
-                    // Check USDT, then USD (Delta uses USD for balance)
-                    $usdtFree = $balanceData['USDT']['free'] ?? ($balanceData['total']['USDT'] ?? 0);
-                    $usdFree = $balanceData['USD']['free'] ?? ($balanceData['total']['USD'] ?? 0);
-                    $balances[$account->id] = $usdtFree + $usdFree;
-                }
+                $balances[$account->id] = $exchange->getAvailableBalance();
             } catch (\Exception $e) {
-                $balances[$account->id] = 'Error/API limits';
+                $balances[$account->id] = 0;
             }
         }
 
@@ -67,17 +58,10 @@ class BotInstanceController extends Controller
         foreach ($accounts as $account) {
             try {
                 $exchange = new \App\Services\ExchangeService($account);
-                $balanceData = $exchange->fetchBalance();
-                
-                if (empty($balanceData)) {
-                    $balances[$account->id] = 'API Error/Blocked';
-                } else {
-                    $usdtFree = $balanceData['USDT']['free'] ?? ($balanceData['total']['USDT'] ?? 0);
-                    $usdFree = $balanceData['USD']['free'] ?? ($balanceData['total']['USD'] ?? 0);
-                    $balances[$account->id] = is_numeric($usdtFree + $usdFree) ? number_format($usdtFree + $usdFree, 2) : 'Error';
-                }
+                $bal = $exchange->getAvailableBalance();
+                $balances[$account->id] = number_format($bal, 2);
             } catch (\Exception $e) {
-                $balances[$account->id] = 'Error/API limits';
+                $balances[$account->id] = 'Error';
             }
         }
 

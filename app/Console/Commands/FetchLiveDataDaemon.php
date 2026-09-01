@@ -46,15 +46,8 @@ class FetchLiveDataDaemon extends Command
                 foreach ($user->brokerAccounts as $account) {
                     try {
                         $exchange = new ExchangeService($account);
-                        $balanceData = $exchange->fetchBalance();
-                        
-                        if (empty($balanceData)) {
-                            $balances[$account->id] = 'API Error';
-                        } else {
-                            $usdtFree = $balanceData['USDT']['free'] ?? ($balanceData['total']['USDT'] ?? 0);
-                            $usdFree = $balanceData['USD']['free'] ?? ($balanceData['total']['USD'] ?? 0);
-                            $balances[$account->id] = is_numeric($usdtFree + $usdFree) ? number_format($usdtFree + $usdFree, 2) : 'Error';
-                        }
+                        $bal = $exchange->getAvailableBalance();
+                        $balances[$account->id] = number_format($bal, 2);
                     } catch (Exception $e) {
                         $balances[$account->id] = 'Error/API limits';
                     }

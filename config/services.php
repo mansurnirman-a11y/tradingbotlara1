@@ -39,4 +39,8 @@ return [
         'token' => env('TELEGRAM_BOT_TOKEN', '')
     ],
 
+    'metaapi' => [
+        'token' => env('META_API_TOKEN', ''),
+    ],
+
 ];

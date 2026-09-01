@@ -32,7 +32,7 @@ class RunTradingBots extends Command
         $dispatched = 0;
         foreach ($bots as $bot) {
             // Skip bots using webhook strategies as they are event-driven
-            if ($bot->strategy && $bot->strategy->type === 'webhook') {
+            if (($bot->strategy && $bot->strategy->type === 'webhook') || $bot->strategy_class === 'Webhook') {
                 continue;
             }
             

@@ -28,6 +28,25 @@ class StrategyController extends Controller
         
         if ($data['type'] === 'webhook') {
             $data['webhook_key'] = Str::random(32);
+            $data['class_name'] = 'Webhook';
+        } else {
+            $rawClass = $data['class_name'] ?? '';
+            $norm = strtolower(preg_replace('/[^a-zA-Z0-9]/', '', $rawClass));
+            if ($norm === 'inbuildsupertrend' || $norm === 'supertrend' || $norm === 'supertrendstrategy') {
+                $data['class_name'] = \App\Strategies\SupertrendStrategy::class;
+            } elseif ($norm === 'emacrossover' || $norm === 'emacrossoverstrategy') {
+                $data['class_name'] = \App\Strategies\EmaCrossoverStrategy::class;
+            } elseif ($norm === 'rsireversal' || $norm === 'rsistrategy') {
+                $data['class_name'] = \App\Strategies\RsiStrategy::class;
+            } elseif ($norm === 'macdmomentum' || $norm === 'macdstrategy') {
+                $data['class_name'] = \App\Strategies\MacdStrategy::class;
+            } elseif ($norm === 'smatrend' || $norm === 'smacrossoverstrategy') {
+                $data['class_name'] = \App\Strategies\SmaCrossoverStrategy::class;
+            } elseif ($norm === 'bollingerscalper' || $norm === 'bollingerscalpingstrategy') {
+                $data['class_name'] = \App\Strategies\BollingerScalpingStrategy::class;
+            } elseif (!empty($rawClass) && !str_starts_with($rawClass, 'App\\Strategies\\')) {
+                $data['class_name'] = 'App\\Strategies\\' . ltrim($rawClass, '\\');
+            }
         }
 
         Strategy::create($data);

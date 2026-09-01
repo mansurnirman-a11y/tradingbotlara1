@@ -174,8 +174,29 @@ class BotInstanceController extends Controller
 
             // Get Strategy Data
             $strategyData = null;
-            if ($bot->strategy_class && class_exists($bot->strategy_class)) {
-                $strategy = new $bot->strategy_class();
+            $strategyClass = $bot->strategy_class ?: ($bot->strategy ? $bot->strategy->class_name : null);
+            $normalized = strtolower(preg_replace('/[^a-zA-Z0-9]/', '', $strategyClass ?? ''));
+            if ($normalized === 'inbuildsupertrend' || $normalized === 'supertrend' || $normalized === 'supertrendstrategy') {
+                $strategyClass = \App\Strategies\SupertrendStrategy::class;
+            } elseif ($normalized === 'emacrossover' || $normalized === 'emacrossoverstrategy') {
+                $strategyClass = \App\Strategies\EmaCrossoverStrategy::class;
+            } elseif ($normalized === 'rsireversal' || $normalized === 'rsistrategy') {
+                $strategyClass = \App\Strategies\RsiStrategy::class;
+            } elseif ($normalized === 'macdmomentum' || $normalized === 'macdstrategy') {
+                $strategyClass = \App\Strategies\MacdStrategy::class;
+            } elseif ($normalized === 'smatrend' || $normalized === 'smacrossoverstrategy') {
+                $strategyClass = \App\Strategies\SmaCrossoverStrategy::class;
+            } elseif ($normalized === 'bollingerscalper' || $normalized === 'bollingerscalpingstrategy') {
+                $strategyClass = \App\Strategies\BollingerScalpingStrategy::class;
+            } elseif ($strategyClass && !class_exists($strategyClass)) {
+                $namespaced = 'App\\Strategies\\' . ltrim($strategyClass, '\\');
+                if (class_exists($namespaced)) {
+                    $strategyClass = $namespaced;
+                }
+            }
+
+            if ($strategyClass && class_exists($strategyClass)) {
+                $strategy = new $strategyClass();
                 if ($strategy instanceof \App\Strategies\StrategyInterface) {
                     $strategyData = $strategy->getChartData($ohlcv, $bot->parameters ?? []);
                 }

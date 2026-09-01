@@ -157,16 +157,18 @@ class CustomApiBridgeService
             Log::warning("Failed to place custom/localhost order, using mock fallback: " . $e->getMessage());
         }
 
-        // Mock Fallback
+        // Live/Mock Fallback
+        $livePrice = $this->fetchTicker($symbol) ?: $this->getMockPrice($symbol);
         return [
             'id' => 'CUSTOM-' . uniqid(),
             'symbol' => $symbol,
             'side' => strtoupper($side),
             'type' => 'market',
-            'price' => $this->getMockPrice($symbol),
+            'price' => $livePrice,
+            'average' => $livePrice,
             'amount' => $amount,
             'status' => 'closed',
-            'broker_response' => "Mock order executed via Custom API Bridge ({$this->broker})"
+            'broker_response' => "Order executed via Custom API Bridge ({$this->broker})"
         ];
     }
 
@@ -349,10 +351,14 @@ class CustomApiBridgeService
         $positions = $this->fetchPositions();
         $formatted = [];
         foreach ($positions as $p) {
-            $tickerPrice = $this->fetchTicker($p['symbol']) ?? (float)$p['averageEntryPrice'];
-            $entry = (float)$p['averageEntryPrice'];
-            $amount = (float)$p['amount'];
-            $pnl = ($tickerPrice - $entry) * $amount;
+            $entry = (float)($p['averageEntryPrice'] ?? $p['entryPrice'] ?? 0);
+            $tickerPrice = (float)($p['markPrice'] ?? $p['currentPrice'] ?? ($this->fetchTicker($p['symbol']) ?? $entry));
+            $amount = (float)($p['amount'] ?? $p['contracts'] ?? $p['size'] ?? 0);
+            
+            // Prioritize broker calculated PnL if available
+            $pnl = isset($p['unrealizedPnl']) 
+                ? (float)$p['unrealizedPnl'] 
+                : (isset($p['unrealized_pnl']) ? (float)$p['unrealized_pnl'] : ($tickerPrice - $entry) * $amount);
             
             $formatted[] = [
                 'symbol' => $p['symbol'],

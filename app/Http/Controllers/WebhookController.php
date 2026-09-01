@@ -51,7 +51,8 @@ class WebhookController extends Controller
                 $ticker = $exchange->fetchTicker($bot->symbol);
                 if (!$ticker) continue;
 
-                $currentPrice = $ticker;
+                $currentPrice = floatval($ticker);
+                $contractSize = $exchange->getContractSize($bot->symbol) ?: 1.0;
 
                 // Close existing position if needed
                 $activePosition = Position::where('bot_instance_id', $bot->id)
@@ -63,47 +64,88 @@ class WebhookController extends Controller
                        ($action === 'BUY' && $activePosition->side === 'SHORT') || 
                        ($action === 'SELL' && $activePosition->side === 'LONG')) {
                            
-                        $exchange->closePosition($bot->symbol);
-                        $pnl = $activePosition->side === 'LONG' 
-                            ? ($currentPrice - $activePosition->entry_price) / $activePosition->entry_price * 100
-                            : ($activePosition->entry_price - $currentPrice) / $activePosition->entry_price * 100;
-                            
+                        $exchange->closePosition($bot->symbol, $activePosition->quantity, $activePosition->side);
+                        $realizedPnl = $activePosition->side === 'LONG' 
+                            ? ($currentPrice - $activePosition->entry_price) * ($activePosition->quantity * $contractSize)
+                            : ($activePosition->entry_price - $currentPrice) * ($activePosition->quantity * $contractSize);
+
                         $activePosition->update([
                             'status' => 'CLOSED',
                             'exit_price' => $currentPrice,
                             'closed_at' => now(),
-                            'realized_pnl' => $pnl,
+                            'realized_pnl' => $realizedPnl,
                         ]);
+
+                        // Dynamic Capital Update (Compounding)
+                        $newCapital = max(0, round(floatval($bot->allocated_capital) + $realizedPnl, 4));
+                        $bot->update(['allocated_capital' => $newCapital]);
+                        $bot->allocated_capital = $newCapital;
                         
-                        $results[$bot->id][] = 'Position Closed';
+                        $results[$bot->id][] = 'Position Closed. Updated Capital: $' . number_format($newCapital, 2);
+                        $activePosition = null; // Position is now closed
                     }
                 }
 
                 // Open new position
-                if ($action === 'BUY' && (!$activePosition || $activePosition->side === 'SHORT' || $action === 'CLOSE')) {
-                    $exchange->createOrder($bot->symbol, 'market', 'buy', $bot->allocated_capital);
+                if (($action === 'BUY' || $action === 'SELL') && !$activePosition) {
+                    $customLeverage = isset($bot->parameters['leverage']) ? floatval($bot->parameters['leverage']) : null;
+                    $leverage = $exchange->getLeverage($bot->symbol, $customLeverage);
+                    $positionValue = $bot->allocated_capital * $leverage;
+
+                    $rawQuantity = ($positionValue / $currentPrice) / $contractSize;
+                    $quantity = $exchange->formatAmount($bot->symbol, $rawQuantity);
+
+                    if (floatval($quantity) <= 0) {
+                        $market = $exchange->getMarketInfo($bot->symbol);
+                        if ($market && isset($market['precision']['amount']) && $market['precision']['amount'] == 1) {
+                            $quantity = $exchange->formatAmount($bot->symbol, $positionValue);
+                        } else {
+                            throw new Exception("Allocated capital ({$bot->allocated_capital}) is too small. Calculated quantity rounded to 0.");
+                        }
+                    }
+
+                    $order = $exchange->createMarketOrder($bot->symbol, strtolower($action), $quantity);
+
+                    $execPrice = floatval($order['average'] ?? $order['price'] ?? $order['averagePrice'] ?? 0);
+                    if ($execPrice <= 0 || (abs($execPrice - $currentPrice) / $currentPrice > 0.2)) {
+                        $execPrice = $currentPrice;
+                    }
+
+                    $actualFilled = floatval($order['filled'] ?? $order['amount'] ?? $order['contracts'] ?? $order['quantity'] ?? $quantity);
+                    if ($actualFilled <= 0) {
+                        $actualFilled = $quantity;
+                    }
+
+                    $volumeUsd = $execPrice * ($actualFilled * $contractSize);
+
+                    $side = $action === 'BUY' ? 'LONG' : 'SHORT';
                     Position::create([
                         'bot_instance_id' => $bot->id,
+                        'user_id' => $bot->user_id,
                         'symbol' => $bot->symbol,
-                        'side' => 'LONG',
-                        'entry_price' => $currentPrice,
-                        'amount' => $bot->allocated_capital,
+                        'side' => $side,
+                        'entry_price' => $execPrice,
+                        'quantity' => $actualFilled,
                         'opened_at' => now(),
                         'status' => 'OPEN',
                     ]);
-                    $results[$bot->id][] = 'LONG Position Opened';
-                } elseif ($action === 'SELL' && (!$activePosition || $activePosition->side === 'LONG' || $action === 'CLOSE')) {
-                    $exchange->createOrder($bot->symbol, 'market', 'sell', $bot->allocated_capital);
-                    Position::create([
+
+                    $orderId = $order['id'] ?? $order['order_id'] ?? ('ORD-' . uniqid());
+                    \App\Models\Trade::create([
                         'bot_instance_id' => $bot->id,
+                        'user_id' => $bot->user_id,
+                        'order_id' => $orderId,
                         'symbol' => $bot->symbol,
-                        'side' => 'SHORT',
-                        'entry_price' => $currentPrice,
-                        'amount' => $bot->allocated_capital,
-                        'opened_at' => now(),
-                        'status' => 'OPEN',
+                        'side' => $action,
+                        'type' => 'MARKET',
+                        'price' => $execPrice,
+                        'quantity' => $actualFilled,
+                        'volume_usd' => $volumeUsd,
+                        'status' => 'FILLED',
+                        'executed_at' => now(),
                     ]);
-                    $results[$bot->id][] = 'SHORT Position Opened';
+
+                    $results[$bot->id][] = "{$side} Position Opened (Qty: {$actualFilled})";
                 }
 
             } catch (\Exception $e) {

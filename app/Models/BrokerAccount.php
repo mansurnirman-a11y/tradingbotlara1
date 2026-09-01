@@ -35,4 +35,22 @@ class BrokerAccount extends Model
     {
         return $this->hasMany(BotInstance::class);
     }
+
+    /**
+     * Get effective leverage for the broker account
+     */
+    public function getEffectiveLeverage(?float $override = null): float
+    {
+        if ($override !== null && $override > 0) {
+            return (float) $override;
+        }
+
+        return match (strtolower($this->broker ?? '')) {
+            'oanda' => 25.0,
+            'delta', 'delta_india' => 20.0,
+            'binance', 'bybit' => 20.0,
+            'mt4', 'mt5' => 100.0,
+            default => 25.0,
+        };
+    }
 }

@@ -33,11 +33,42 @@ class EvaluateStrategyJob implements ShouldQueue
             // 2. Fetch Market Data
             $candles = $exchangeService->fetchOHLCV($this->bot->symbol, $this->bot->timeframe, 100);
 
-            // 3. Initialize Strategy
-            $strategyClass = $this->bot->strategy_class;
-            if (!class_exists($strategyClass)) {
-                throw new Exception("Strategy class {$strategyClass} not found.");
+            // Skip webhook-driven bots from candle cron evaluation
+            if (
+                $this->bot->strategy_class === 'Webhook' ||
+                ($this->bot->strategy && $this->bot->strategy->type === 'webhook')
+            ) {
+                return;
             }
+
+            // 3. Initialize Strategy
+            $strategyClass = $this->bot->strategy_class ?: ($this->bot->strategy ? $this->bot->strategy->class_name : null);
+
+            // Handle Aliases and Namespaces
+            $normalized = strtolower(preg_replace('/[^a-zA-Z0-9]/', '', $strategyClass ?? ''));
+            if ($normalized === 'inbuildsupertrend' || $normalized === 'supertrend' || $normalized === 'supertrendstrategy') {
+                $strategyClass = \App\Strategies\SupertrendStrategy::class;
+            } elseif ($normalized === 'emacrossover' || $normalized === 'emacrossoverstrategy') {
+                $strategyClass = \App\Strategies\EmaCrossoverStrategy::class;
+            } elseif ($normalized === 'rsireversal' || $normalized === 'rsistrategy') {
+                $strategyClass = \App\Strategies\RsiStrategy::class;
+            } elseif ($normalized === 'macdmomentum' || $normalized === 'macdstrategy') {
+                $strategyClass = \App\Strategies\MacdStrategy::class;
+            } elseif ($normalized === 'smatrend' || $normalized === 'smacrossoverstrategy') {
+                $strategyClass = \App\Strategies\SmaCrossoverStrategy::class;
+            } elseif ($normalized === 'bollingerscalper' || $normalized === 'bollingerscalpingstrategy') {
+                $strategyClass = \App\Strategies\BollingerScalpingStrategy::class;
+            }
+
+            if (!$strategyClass || !class_exists($strategyClass)) {
+                $namespaced = 'App\\Strategies\\' . ltrim($strategyClass ?? '', '\\');
+                if (class_exists($namespaced)) {
+                    $strategyClass = $namespaced;
+                } else {
+                    throw new Exception("Strategy class {$strategyClass} not found.");
+                }
+            }
+
             $strategy = new $strategyClass();
 
             $currentPrice = $candles[count($candles)-1][4];
@@ -60,38 +91,61 @@ class EvaluateStrategyJob implements ShouldQueue
                     
                     $isActive = false;
                     
-                    foreach ($exchangePositions as $ep) {
-                        $epSymbol = $ep['symbol'] ?? $ep['product_symbol'] ?? $ep['info']['product_symbol'] ?? '';
-                        if (str_replace(['/', '-', ':'], '', $epSymbol) === str_replace(['/', '-', ':'], '', $this->bot->symbol)) {
-                            $contracts = floatval($ep['contracts'] ?? $ep['size'] ?? 0);
-                            $exchangeSide = $contracts > 0 ? 'LONG' : ($contracts < 0 ? 'SHORT' : '');
-                            
-                            if (abs($contracts) > 0 && $exchangeSide === $openPosition->side) {
-                                $isActive = true;
+                    if (is_array($exchangePositions) && count($exchangePositions) > 0) {
+                        foreach ($exchangePositions as $ep) {
+                            $epSymbol = $ep['symbol'] ?? $ep['product_symbol'] ?? $ep['info']['product_symbol'] ?? '';
+                            if (str_replace(['/', '-', ':'], '', $epSymbol) === str_replace(['/', '-', ':'], '', $this->bot->symbol)) {
+                                $contracts = floatval($ep['contracts'] ?? $ep['size'] ?? $ep['amount'] ?? 0);
+                                $exchangeSide = $contracts > 0 ? 'LONG' : ($contracts < 0 ? 'SHORT' : '');
                                 
-                                // UPDATE LOCAL POSITION WITH EXCHANGE DATA
-                                $actualEntryPrice = $ep['entryPrice'] ?? $ep['entry_price'] ?? $ep['info']['entry_price'] ?? null;
-                                if ($actualEntryPrice && $actualEntryPrice != $openPosition->entry_price) {
-                                    $openPosition->update([
-                                        'entry_price' => $actualEntryPrice
-                                    ]);
+                                if (abs($contracts) > 0 && ($exchangeSide === $openPosition->side || empty($exchangeSide))) {
+                                    $isActive = true;
+                                    
+                                    // UPDATE LOCAL POSITION WITH EXACT BROKER DATA (Entry Price AND Quantity)
+                                    $updates = [];
+                                    $actualEntryPrice = $ep['entryPrice'] ?? $ep['entry_price'] ?? $ep['averageEntryPrice'] ?? $ep['info']['entry_price'] ?? null;
+                                    if ($actualEntryPrice && (float)$actualEntryPrice != (float)$openPosition->entry_price) {
+                                        $updates['entry_price'] = (float)$actualEntryPrice;
+                                    }
+
+                                    $actualQuantity = abs(floatval($ep['contracts'] ?? $ep['size'] ?? $ep['amount'] ?? 0));
+                                    if ($actualQuantity > 0 && (float)$actualQuantity != (float)$openPosition->quantity) {
+                                        $updates['quantity'] = (float)$actualQuantity;
+                                    }
+
+                                    if (!empty($updates)) {
+                                        $openPosition->update($updates);
+                                    }
+                                    
+                                    break;
                                 }
-                                
-                                break;
                             }
                         }
-                    }
 
-                    // If not found active on exchange, it was closed manually/externally
-                    if (!$isActive) {
-                        $openPosition->update([
-                            'status' => 'CLOSED',
-                            'closed_at' => now(),
-                            'exit_price' => $currentPrice, // Fallback exit price
-                        ]);
-                        $openPosition = null; // Clear local reference
+                        // Only auto-close if exchange is CCXT and confirmed active list did not include this position
+                        $isCustomBroker = in_array($this->bot->brokerAccount->broker ?? '', ['oanda', 'custom_api', 'mt4', 'mt5']);
+                        if (!$isActive && !$isCustomBroker) {
+                            $contractSize = $exchangeService->getContractSize($this->bot->symbol);
+                            $pnl = $openPosition->side === 'LONG'
+                                ? ($currentPrice - $openPosition->entry_price) * ($openPosition->quantity * $contractSize)
+                                : ($openPosition->entry_price - $currentPrice) * ($openPosition->quantity * $contractSize);
+
+                            $openPosition->update([
+                                'status' => 'CLOSED',
+                                'closed_at' => now(),
+                                'exit_price' => $currentPrice, // Fallback exit price
+                                'realized_pnl' => $pnl,
+                            ]);
+
+                            // Update bot allocated capital dynamically
+                            $newCapital = max(0, round(floatval($this->bot->allocated_capital) + $pnl, 4));
+                            $this->bot->update(['allocated_capital' => $newCapital]);
+                            $this->bot->allocated_capital = $newCapital;
+
+                            $openPosition = null; // Clear local reference
+                        }
                     }
-                } catch (\Exception $syncError) {
+                } catch (\Throwable $syncError) {
                     // If API fails, assume it's still open to prevent duplicate orders
                 }
             }
@@ -125,8 +179,92 @@ class EvaluateStrategyJob implements ShouldQueue
 
             // 5. Execute Trade & Manage Positions
             if ($signal === 'BUY' || $signal === 'SELL') {
-                $currentPrice = $candles[count($candles)-1][4];
-                $rawQuantity = $this->bot->allocated_capital / $currentPrice;
+                // If we already hold an open position in the same direction, maintain position without duplicate orders
+                if ($signal === 'BUY' && $openPosition && $openPosition->side === 'LONG') {
+                    return;
+                }
+                if ($signal === 'SELL' && $openPosition && $openPosition->side === 'SHORT') {
+                    return;
+                }
+
+                // Check minimum capital threshold
+                if (floatval($this->bot->allocated_capital) < 10) {
+                    $this->bot->update(['status' => 'stopped']);
+                    throw new Exception("Bot stopped: Allocated capital ({$this->bot->allocated_capital}) is below minimum $10 threshold.");
+                }
+
+                $contractSize = $exchangeService->getContractSize($this->bot->symbol) ?: 1.0;
+
+                // ----------------------------------------------------
+                // CASE A: CLOSING EXISTING OPPOSING POSITION
+                // ----------------------------------------------------
+                $isClosingShort = ($signal === 'BUY' && $openPosition && $openPosition->side === 'SHORT');
+                $isClosingLong = ($signal === 'SELL' && $openPosition && $openPosition->side === 'LONG');
+
+                if ($isClosingShort || $isClosingLong) {
+                    // Send exact existing open position quantity to broker to ensure clean 0 balance on broker
+                    $closeQuantity = $openPosition->quantity;
+                    $order = $exchangeService->createMarketOrder(
+                        $this->bot->symbol,
+                        strtolower($signal),
+                        $closeQuantity
+                    );
+
+                    $execPrice = floatval($order['average'] ?? $order['price'] ?? $order['averagePrice'] ?? 0);
+                    if ($execPrice <= 0 || (abs($execPrice - $currentPrice) / $currentPrice > 0.2)) {
+                        $execPrice = $currentPrice;
+                    }
+
+                    $realizedPnl = $isClosingShort
+                        ? ($openPosition->entry_price - $execPrice) * ($openPosition->quantity * $contractSize)
+                        : ($execPrice - $openPosition->entry_price) * ($openPosition->quantity * $contractSize);
+
+                    $openPosition->update([
+                        'exit_price' => $execPrice,
+                        'status' => 'CLOSED',
+                        'closed_at' => now(),
+                        'realized_pnl' => $realizedPnl,
+                    ]);
+
+                    // Dynamic Compounding Capital Update
+                    $newCapital = max(0, round(floatval($this->bot->allocated_capital) + $realizedPnl, 4));
+                    $this->bot->update(['allocated_capital' => $newCapital]);
+                    $this->bot->allocated_capital = $newCapital;
+
+                    $orderId = $order['id'] ?? $order['order_id'] ?? ('ORD-' . uniqid());
+                    $tradeModel = Trade::create([
+                        'bot_instance_id' => $this->bot->id,
+                        'user_id' => $this->bot->user_id,
+                        'order_id' => $orderId,
+                        'symbol' => $this->bot->symbol,
+                        'side' => $signal,
+                        'type' => 'MARKET',
+                        'price' => $execPrice,
+                        'quantity' => $closeQuantity,
+                        'volume_usd' => $execPrice * ($closeQuantity * $contractSize),
+                        'status' => 'FILLED',
+                        'realized_pnl' => $realizedPnl,
+                        'executed_at' => now(),
+                    ]);
+
+                    if ($this->bot->user) {
+                        try {
+                            $this->bot->user->notify(new \App\Notifications\TradeExecuted($tradeModel));
+                        } catch (\Throwable $notifErr) {}
+                    }
+
+                    return;
+                }
+
+                // ----------------------------------------------------
+                // CASE B: OPENING NEW POSITION
+                // ----------------------------------------------------
+                $customLeverage = isset($this->bot->parameters['leverage']) ? floatval($this->bot->parameters['leverage']) : null;
+                $leverage = $exchangeService->getLeverage($this->bot->symbol, $customLeverage);
+                $positionValue = $this->bot->allocated_capital * $leverage;
+
+                // Divide by contract size for Forex lots / derivative contracts
+                $rawQuantity = ($positionValue / $currentPrice) / $contractSize;
                 
                 // Format quantity to exchange precision rules
                 $quantity = $exchangeService->formatAmount($this->bot->symbol, $rawQuantity);
@@ -134,9 +272,7 @@ class EvaluateStrategyJob implements ShouldQueue
                 if (floatval($quantity) <= 0) {
                     $market = $exchangeService->getMarketInfo($this->bot->symbol);
                     if ($market && isset($market['precision']['amount']) && $market['precision']['amount'] == 1) {
-                        // Contract-based market (e.g. Delta BTC/USD where 1 contract = 1 USD)
-                        // In this case, amount is the number of contracts. We use allocated capital as the number of contracts.
-                        $quantity = $exchangeService->formatAmount($this->bot->symbol, $this->bot->allocated_capital);
+                        $quantity = $exchangeService->formatAmount($this->bot->symbol, $positionValue);
                     } else {
                         throw new Exception("Allocated capital ({$this->bot->allocated_capital}) is too small. Calculated quantity rounded to 0.");
                     }
@@ -149,96 +285,69 @@ class EvaluateStrategyJob implements ShouldQueue
                 );
 
                 // Fetch true execution price (average fill price)
-                $execPrice = $order['average'] ?? $order['price'] ?? null;
-                if (!$execPrice || floatval($execPrice) == 0) {
-                    try {
-                        // Sleep for a moment to allow exchange to process the fill
-                        sleep(1);
-                        $fetchedOrder = $exchangeService->getClient()->fetchOrder($order['id'], $this->bot->symbol);
-                        $execPrice = $fetchedOrder['average'] ?? $fetchedOrder['price'] ?? $currentPrice;
-                    } catch (\Exception $e) {
-                        $execPrice = $currentPrice;
-                    }
+                $execPrice = floatval($order['average'] ?? $order['price'] ?? $order['averagePrice'] ?? 0);
+                if ($execPrice <= 0 || (abs($execPrice - $currentPrice) / $currentPrice > 0.2)) {
+                    $execPrice = $currentPrice;
                 }
 
-                // Fetch contract size to correctly calculate USD Volume and PNL
-                $contractSize = $exchangeService->getContractSize($this->bot->symbol);
-                $volumeUsd = $execPrice * ($quantity * $contractSize);
+                // Actual executed quantity from broker response (Ground Truth)
+                $actualFilled = floatval($order['filled'] ?? $order['amount'] ?? $order['contracts'] ?? $order['quantity'] ?? $quantity);
+                if ($actualFilled <= 0) {
+                    $actualFilled = $quantity;
+                }
+
+                $volumeUsd = $execPrice * ($actualFilled * $contractSize);
 
                 // Record Trade Action
+                $orderId = $order['id'] ?? $order['order_id'] ?? ('ORD-' . uniqid());
                 $tradeModel = Trade::create([
                     'bot_instance_id' => $this->bot->id,
                     'user_id' => $this->bot->user_id,
-                    'order_id' => $order['id'],
+                    'order_id' => $orderId,
                     'symbol' => $this->bot->symbol,
                     'side' => $signal,
                     'type' => 'MARKET',
                     'price' => $execPrice,
-                    'quantity' => $quantity,
+                    'quantity' => $actualFilled,
                     'volume_usd' => $volumeUsd,
                     'status' => 'FILLED',
                     'executed_at' => now(),
                 ]);
 
-                // Send Telegram & Email Notification
-                $this->bot->user->notify(new \App\Notifications\TradeExecuted($tradeModel));
+                // Create Open Position with exact broker executed lot size and price
+                Position::create([
+                    'bot_instance_id' => $this->bot->id,
+                    'user_id' => $this->bot->user_id,
+                    'symbol' => $this->bot->symbol,
+                    'side' => $signal === 'BUY' ? 'LONG' : 'SHORT',
+                    'quantity' => $actualFilled,
+                    'entry_price' => $execPrice,
+                    'status' => 'OPEN',
+                    'opened_at' => now(),
+                ]);
 
-                // (Position is fetched earlier in the job)
-                
-                
-                if ($signal === 'BUY') {
-                    if ($openPosition && $openPosition->side === 'SHORT') {
-                        // Close Short Position
-                        $openPosition->update([
-                            'exit_price' => $execPrice,
-                            'status' => 'CLOSED',
-                            'closed_at' => now(),
-                            'realized_pnl' => ($openPosition->entry_price - $execPrice) * ($openPosition->quantity * $contractSize),
-                        ]);
-                    } elseif (!$openPosition) {
-                        // Open Long Position
-                        Position::create([
-                            'bot_instance_id' => $this->bot->id,
-                            'user_id' => $this->bot->user_id,
-                            'symbol' => $this->bot->symbol,
-                            'side' => 'LONG',
-                            'quantity' => $quantity,
-                            'entry_price' => $execPrice,
-                            'status' => 'OPEN',
-                            'opened_at' => now(),
-                        ]);
-                    }
-                } elseif ($signal === 'SELL') {
-                    if ($openPosition && $openPosition->side === 'LONG') {
-                        // Close Long Position
-                        $openPosition->update([
-                            'exit_price' => $execPrice,
-                            'status' => 'CLOSED',
-                            'closed_at' => now(),
-                            'realized_pnl' => ($execPrice - $openPosition->entry_price) * ($openPosition->quantity * $contractSize),
-                        ]);
-                    } elseif (!$openPosition) {
-                        // Open Short Position
-                        Position::create([
-                            'bot_instance_id' => $this->bot->id,
-                            'user_id' => $this->bot->user_id,
-                            'symbol' => $this->bot->symbol,
-                            'side' => 'SHORT',
-                            'quantity' => $quantity,
-                            'entry_price' => $execPrice,
-                            'status' => 'OPEN',
-                            'opened_at' => now(),
-                        ]);
+                // Send Telegram & Email Notification
+                if ($this->bot->user) {
+                    try {
+                        $this->bot->user->notify(new \App\Notifications\TradeExecuted($tradeModel));
+                    } catch (\Throwable $notifErr) {
+                        \Log::warning("Notification failed for bot trade: " . $notifErr->getMessage());
                     }
                 }
             }
 
-        } catch (Exception $e) {
+        } catch (\Throwable $e) {
             $errorMessage = $e->getMessage();
             \Log::error("Bot {$this->bot->id} failed: " . $errorMessage);
             
-            // Send the new automated error email to the user
-            $this->bot->user->notify(new \App\Notifications\BotErrorNotification($this->bot, $errorMessage));
+            // Send the automated error notification to the user
+            if (isset($this->bot->user)) {
+                try {
+                    $this->bot->user->notify(new \App\Notifications\BotErrorNotification($this->bot, $errorMessage));
+                } catch (\Throwable $notifErr) {
+                    // Suppress secondary notification error
+                }
+            }
         }
     }
 }

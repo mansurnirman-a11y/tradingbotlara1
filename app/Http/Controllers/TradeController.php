@@ -12,16 +12,27 @@ class TradeController extends Controller
 {
     public function index()
     {
-        $query = Position::with(['botInstance.brokerAccount', 'user'])->orderBy('opened_at', 'desc');
+        $baseQuery = Position::with(['botInstance.brokerAccount', 'user']);
 
-        if (!in_array(Auth::user()->role, ['admin', 'superadmin'])) {
-            $query->where('user_id', Auth::id());
+        $user = Auth::user();
+        if ($user && !in_array($user->role, ['admin', 'superadmin'])) {
+            $baseQuery->where('user_id', $user->id);
         }
 
-        $positions = $query->paginate(20);
+        // 1. Open Positions (all active live positions)
+        $openPositions = (clone $baseQuery)
+            ->where('status', 'OPEN')
+            ->orderBy('opened_at', 'desc')
+            ->get();
+
+        // 2. Closed Positions (historical ledger with pagination)
+        $closedPositions = (clone $baseQuery)
+            ->where('status', 'CLOSED')
+            ->orderBy('closed_at', 'desc')
+            ->paginate(20);
 
         $exchangeServices = [];
-        foreach ($positions as $position) {
+        $enrichPosition = function ($position) use (&$exchangeServices) {
             $bot = $position->botInstance;
             if ($bot && $bot->brokerAccount) {
                 $brokerId = $bot->brokerAccount->id;
@@ -48,9 +59,72 @@ class TradeController extends Controller
                 $position->base_size = $position->quantity;
                 $position->margin_used = 0;
             }
+        };
+
+        foreach ($openPositions as $position) {
+            $enrichPosition($position);
+            
+            // Pre-calculate instant live PnL for initial page load from broker if available
+            $bot = $position->botInstance;
+            if ($bot && $bot->brokerAccount) {
+                $service = $exchangeServices[$bot->brokerAccount->id] ?? null;
+                if ($service) {
+                    try {
+                        $brokerFound = false;
+                        $client = $service->getClient();
+                        if (is_callable([$client, 'fetch_positions']) || is_callable([$client, 'fetchPositions'])) {
+                            $eps = is_callable([$client, 'fetch_positions']) ? $client->fetch_positions() : $client->fetchPositions();
+                            if (is_array($eps)) {
+                                foreach ($eps as $ep) {
+                                    $epSymbol = $ep['symbol'] ?? $ep['product_symbol'] ?? '';
+                                    if (str_replace(['/', '-', ':'], '', $epSymbol) === str_replace(['/', '-', ':'], '', $position->symbol)) {
+                                        $contracts = floatval($ep['contracts'] ?? $ep['size'] ?? $ep['amount'] ?? 0);
+                                        $exchangeSide = $contracts > 0 ? 'LONG' : ($contracts < 0 ? 'SHORT' : '');
+                                        if (abs($contracts) > 0 && ($exchangeSide === $position->side || empty($exchangeSide))) {
+                                            $brokerEntry = $ep['entryPrice'] ?? $ep['entry_price'] ?? $ep['averageEntryPrice'] ?? $ep['info']['entry_price'] ?? null;
+                                            if ($brokerEntry && (float)$brokerEntry != (float)$position->entry_price) {
+                                                $position->entry_price = (float)$brokerEntry;
+                                                $position->update(['entry_price' => (float)$brokerEntry]);
+                                            }
+                                            if (abs($contracts) != (float)$position->quantity) {
+                                                $position->quantity = abs($contracts);
+                                                $position->update(['quantity' => abs($contracts)]);
+                                                $enrichPosition($position);
+                                            }
+                                            $position->current_price = (float)($ep['markPrice'] ?? $ep['mark_price'] ?? $ep['currentPrice'] ?? $position->entry_price);
+                                            $position->unrealized_pnl = (float)($ep['unrealizedPnl'] ?? $ep['unrealized_pnl'] ?? 0);
+                                            $brokerFound = true;
+                                            break;
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        if (!$brokerFound) {
+                            $tickerPrice = $service->fetchTicker($position->symbol);
+                            if ($tickerPrice && is_numeric($tickerPrice)) {
+                                $position->current_price = (float)$tickerPrice;
+                                $contractSize = $service->getContractSize($position->symbol);
+                                if ($position->side === 'LONG') {
+                                    $position->unrealized_pnl = ($position->current_price - $position->entry_price) * ($position->quantity * $contractSize);
+                                } else {
+                                    $position->unrealized_pnl = ($position->entry_price - $position->current_price) * ($position->quantity * $contractSize);
+                                }
+                            }
+                        }
+                    } catch (\Throwable $e) {}
+                }
+            }
         }
 
-        return view('trades.index', compact('positions'));
+        foreach ($closedPositions as $position) {
+            $enrichPosition($position);
+        }
+
+        // Backward compatibility
+        $positions = $closedPositions;
+
+        return view('trades.index', compact('openPositions', 'closedPositions', 'positions'));
     }
 
     public function getLivePnl(Request $request)
@@ -65,8 +139,9 @@ class TradeController extends Controller
         $query = Position::where('status', 'OPEN');
         
         // If user is not admin, restrict to their own positions
-        if (!in_array(Auth::user()->role, ['admin', 'superadmin'])) {
-            $query->where('user_id', Auth::id());
+        $user = Auth::user();
+        if ($user && !in_array($user->role, ['admin', 'superadmin'])) {
+            $query->where('user_id', $user->id);
         }
         
         if (!$fetchAll) {
@@ -88,57 +163,85 @@ class TradeController extends Controller
             if (!isset($exchangeServices[$brokerId])) {
                 try {
                     $exchangeServices[$brokerId] = new \App\Services\ExchangeService($bot->brokerAccount);
-                } catch (\Exception $e) {
+                } catch (\Throwable $e) {
                     continue;
                 }
             }
 
             $service = $exchangeServices[$brokerId];
+            if (!$service) continue;
 
             try {
-                // Use fetch_positions to get the exact Unrealized PNL and Mark Price from the exchange
-                // This handles inverse/linear math and funding fees natively
-                $exchangePositions = $service->getClient()->fetch_positions();
-                
                 $foundExchangePos = false;
-                foreach ($exchangePositions as $ep) {
-                    $epSymbol = $ep['symbol'] ?? $ep['product_symbol'] ?? $ep['info']['product_symbol'] ?? '';
-                    $contracts = floatval($ep['contracts'] ?? $ep['size'] ?? 0);
-                    $exchangeSide = $contracts > 0 ? 'LONG' : ($contracts < 0 ? 'SHORT' : '');
-                    
-                    if (str_replace(['/', '-', ':'], '', $epSymbol) === str_replace(['/', '-', ':'], '', $position->symbol) && abs($contracts) > 0 && $exchangeSide === $position->side) {
-                        
-                        $actualEntryPrice = $ep['entryPrice'] ?? $ep['entry_price'] ?? $ep['info']['entry_price'] ?? null;
-                        if ($actualEntryPrice && $actualEntryPrice != $position->entry_price) {
-                            $position->update(['entry_price' => $actualEntryPrice]);
-                        }
-                        
-                        $currentPrice = $ep['markPrice'] ?? $ep['mark_price'] ?? $ep['info']['mark_price'] ?? null;
-                        $pnl = $ep['unrealizedPnl'] ?? $ep['unrealized_pnl'] ?? $ep['info']['unrealized_pnl'] ?? 0;
-                        
-                        if (!$currentPrice) {
-                            $ticker = $service->getClient()->fetchTicker($position->symbol);
-                            $currentPrice = $ticker['last'] ?? $position->entry_price;
-                        }
+                $client = $service->getClient();
 
-                        $results[$position->id] = [
-                            'current_price' => $currentPrice,
-                            'pnl' => floatval($pnl),
-                            'margin_used' => $bot->allocated_capital
-                        ];
-                        
-                        $foundExchangePos = true;
-                        break;
-                    }
+                // Fetch real live position PnL directly from broker/exchange
+                if (is_callable([$client, 'fetch_positions']) || is_callable([$client, 'fetchPositions'])) {
+                    try {
+                        $exchangePositions = is_callable([$client, 'fetch_positions']) 
+                            ? $client->fetch_positions() 
+                            : $client->fetchPositions();
+
+                        if (is_array($exchangePositions)) {
+                            foreach ($exchangePositions as $ep) {
+                                $epSymbol = $ep['symbol'] ?? $ep['product_symbol'] ?? $ep['info']['product_symbol'] ?? '';
+                                if (str_replace(['/', '-', ':'], '', $epSymbol) === str_replace(['/', '-', ':'], '', $position->symbol)) {
+                                    $contracts = floatval($ep['contracts'] ?? $ep['size'] ?? $ep['amount'] ?? 0);
+                                    $exchangeSide = $contracts > 0 ? 'LONG' : ($contracts < 0 ? 'SHORT' : '');
+                                    
+                                    if (abs($contracts) > 0 && ($exchangeSide === $position->side || empty($exchangeSide))) {
+                                        $currentPrice = $ep['markPrice'] ?? $ep['mark_price'] ?? $ep['currentPrice'] ?? $ep['info']['mark_price'] ?? null;
+                                        $pnl = $ep['unrealizedPnl'] ?? $ep['unrealized_pnl'] ?? $ep['info']['unrealized_pnl'] ?? null;
+                                        $brokerEntry = $ep['entryPrice'] ?? $ep['entry_price'] ?? $ep['averageEntryPrice'] ?? $ep['info']['entry_price'] ?? null;
+                                        
+                                        // Auto-sync position quantity and entry price if broker changed (e.g. partial closes)
+                                        $posUpdates = [];
+                                        if (abs($contracts) != (float)$position->quantity) {
+                                            $posUpdates['quantity'] = abs($contracts);
+                                            $position->quantity = abs($contracts);
+                                        }
+                                        if ($brokerEntry && (float)$brokerEntry != (float)$position->entry_price) {
+                                            $posUpdates['entry_price'] = (float)$brokerEntry;
+                                            $position->entry_price = (float)$brokerEntry;
+                                        }
+                                        if (!empty($posUpdates)) {
+                                            $position->update($posUpdates);
+                                        }
+
+                                        if (!$currentPrice) {
+                                            $currentPrice = $service->fetchTicker($position->symbol) ?? $position->entry_price;
+                                        }
+
+                                        if ($pnl === null) {
+                                            $contractSize = $service->getContractSize($position->symbol);
+                                            $pnl = $position->side === 'LONG'
+                                                ? ($currentPrice - $position->entry_price) * ($position->quantity * $contractSize)
+                                                : ($position->entry_price - $currentPrice) * ($position->quantity * $contractSize);
+                                        }
+
+                                        $results[$position->id] = [
+                                            'current_price' => floatval($currentPrice),
+                                            'pnl' => floatval($pnl),
+                                            'margin_used' => $bot->allocated_capital,
+                                            'quantity' => floatval($position->quantity)
+                                        ];
+                                        
+                                        $foundExchangePos = true;
+                                        break;
+                                    }
+                                }
+                            }
+                        }
+                    } catch (\Throwable $epErr) {}
                 }
                 
-                // Fallback for MetaApi or exchanges that don't support fetch_positions well
+                // Standard Direct Ticker calculation fallback if broker position is not directly queried
                 if (!$foundExchangePos) {
                     $contractSize = $service->getContractSize($position->symbol);
-                    $ticker = $service->getClient()->fetchTicker($position->symbol);
-                    $currentPrice = $ticker['last'] ?? null;
-
-                    if ($currentPrice) {
+                    $currentPrice = $service->fetchTicker($position->symbol);
+                    
+                    if ($currentPrice && is_numeric($currentPrice)) {
+                        $currentPrice = (float)$currentPrice;
                         $pnl = 0;
                         if ($position->side === 'LONG') {
                             $pnl = ($currentPrice - $position->entry_price) * ($position->quantity * $contractSize);
@@ -153,8 +256,8 @@ class TradeController extends Controller
                         ];
                     }
                 }
-            } catch (\Exception $e) {
-                // Skip if error fetching positions
+            } catch (\Throwable $e) {
+                \Log::warning("Error calculating live PnL for pos {$position->id}: " . $e->getMessage());
                 continue;
             }
         }

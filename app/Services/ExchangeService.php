@@ -7,12 +7,15 @@ use Exception;
 
 class ExchangeService
 {
+    protected $account;
     protected $client;
     protected $isMetaApi = false;
     protected $isCustomApi = false;
 
     public function __construct(BrokerAccount $account)
     {
+        $this->account = $account;
+
         if (in_array($account->broker, ['mt4', 'mt5'])) {
             // Route to MetaApi Bridge for MetaTrader
             $this->client = new MetaApiBridgeService($account);
@@ -76,6 +79,48 @@ class ExchangeService
 
         // CCXT implementation: Real Market Order
         return $this->client->create_market_order($symbol, $side, $amount);
+    }
+
+    public function createOrder(string $symbol, string $type, string $side, float $amount, ?float $price = null)
+    {
+        if (strtolower($type) === 'market' || empty($price)) {
+            return $this->createMarketOrder($symbol, $side, $amount);
+        }
+
+        if ($this->isMetaApi || $this->isCustomApi) {
+            return $this->client->createMarketOrder($symbol, $side, $amount);
+        }
+
+        return $this->client->create_order($symbol, $type, $side, $amount, $price);
+    }
+
+    public function closePosition(string $symbol, ?float $amount = null, ?string $side = null)
+    {
+        if ($amount && $amount > 0 && $side) {
+            $closeSide = strtoupper($side) === 'LONG' ? 'sell' : 'buy';
+            return $this->createMarketOrder($symbol, $closeSide, $amount);
+        }
+
+        try {
+            $client = $this->getClient();
+            if (is_callable([$client, 'fetch_positions']) || is_callable([$client, 'fetchPositions'])) {
+                $positions = is_callable([$client, 'fetch_positions']) ? $client->fetch_positions() : $client->fetchPositions();
+                foreach ($positions as $p) {
+                    $sym = $p['symbol'] ?? $p['product_symbol'] ?? '';
+                    if (str_replace(['/', '-', ':'], '', $sym) === str_replace(['/', '-', ':'], '', $symbol)) {
+                        $contracts = floatval($p['contracts'] ?? $p['amount'] ?? $p['size'] ?? 0);
+                        if (abs($contracts) > 0) {
+                            $closeSide = $contracts > 0 ? 'sell' : 'buy';
+                            return $this->createMarketOrder($symbol, $closeSide, abs($contracts));
+                        }
+                    }
+                }
+            }
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::warning("closePosition auto-detect failed for {$symbol}: " . $e->getMessage());
+        }
+
+        return null;
     }
 
     public function formatAmount(string $symbol, float $amount)
@@ -147,6 +192,19 @@ class ExchangeService
 
             return 1;
         });
+    }
+
+    public function getLeverage(string $symbol = '', ?float $override = null): float
+    {
+        if ($override !== null && $override > 0) {
+            return (float) $override;
+        }
+
+        if ($this->account) {
+            return $this->account->getEffectiveLeverage($override);
+        }
+
+        return 25.0;
     }
 
     public function fetchBalance()

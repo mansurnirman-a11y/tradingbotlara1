@@ -70,16 +70,50 @@
 
             <h3 style="margin: 2rem 0 1rem 0; font-size: 1.25rem; border-bottom: 1px solid var(--border-glass); padding-bottom: 0.5rem;">Risk Management</h3>
 
-            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; margin-bottom: 2rem;">
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; margin-bottom: 1.5rem;">
                 <div class="form-group" style="margin-bottom: 0;">
-                    <label class="form-label">Allocated Capital (USDT)</label>
-                    <input type="number" step="0.01" name="allocated_capital" class="form-input" required placeholder="e.g., 500" value="100.00">
+                    <label class="form-label">Allocated Margin / Capital (USDT)</label>
+                    <input type="number" step="0.01" name="allocated_capital" id="allocated_capital_input" class="form-input" required placeholder="e.g., 100" value="100.00">
+                    <small class="text-secondary" style="display: block; margin-top: 0.25rem; font-size: 0.75rem;">Your initial wallet margin allocated for this bot</small>
                 </div>
 
                 <div class="form-group" style="margin-bottom: 0;">
                     <label class="form-label">Max Drawdown Limit (%)</label>
                     <input type="number" step="0.1" name="max_drawdown_pct" class="form-input" required placeholder="e.g., 5.0" value="5.0">
                     <small class="text-secondary" style="display: block; margin-top: 0.25rem; font-size: 0.75rem;">Bot stops if loss exceeds this %</small>
+                </div>
+            </div>
+
+            <!-- Live 25x Futures Position & Lot Size Preview Card -->
+            <div id="position_preview_card" style="background: rgba(0, 230, 118, 0.04); border: 1px solid rgba(0, 230, 118, 0.2); border-radius: 12px; padding: 1.25rem 1.5rem; margin-bottom: 2rem; position: relative; overflow: hidden;">
+                <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 1rem; border-bottom: 1px solid rgba(255,255,255,0.08); padding-bottom: 0.75rem;">
+                    <div style="display: flex; align-items: center; gap: 0.5rem;">
+                        <span style="background: var(--accent-green); color: #000; font-size: 0.7rem; font-weight: 700; padding: 0.2rem 0.5rem; border-radius: 4px;">25x AUTO-MULTIPLY</span>
+                        <span style="font-size: 0.9rem; font-weight: 600; color: #fff;">Futures Position & Lot Estimation</span>
+                    </div>
+                    <span style="font-size: 0.75rem; color: var(--text-secondary);">Calculated Live</span>
+                </div>
+
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 1rem;">
+                    <div>
+                        <div style="font-size: 0.75rem; color: var(--text-secondary); margin-bottom: 0.2rem;">Margin Used</div>
+                        <div id="preview_margin" style="font-size: 1.1rem; font-weight: 700; color: #fff;">$100.00</div>
+                    </div>
+                    <div>
+                        <div style="font-size: 0.75rem; color: var(--text-secondary); margin-bottom: 0.2rem;">Futures Multiplier</div>
+                        <div style="font-size: 1.1rem; font-weight: 700; color: var(--accent-green);">25x</div>
+                    </div>
+                    <div>
+                        <div style="font-size: 0.75rem; color: var(--text-secondary); margin-bottom: 0.2rem;">Total Trade Buying Power</div>
+                        <div id="preview_buying_power" style="font-size: 1.1rem; font-weight: 700; color: var(--accent-green);">$2,500.00</div>
+                    </div>
+                    <div>
+                        <div style="font-size: 0.75rem; color: var(--text-secondary); margin-bottom: 0.2rem;">Est. Lot / Order Size</div>
+                        <div id="preview_lot_size" style="font-size: 1.1rem; font-weight: 700; color: #64b5f6;">~0.0318 BTC</div>
+                    </div>
+                </div>
+                <div style="margin-top: 0.75rem; font-size: 0.72rem; color: rgba(255,255,255,0.6); display: flex; align-items: center; gap: 0.4rem;">
+                    <span>ℹ️</span> <span>Bot will automatically deploy <strong>25x leveraged lot size</strong> on your connected broker.</span>
                 </div>
             </div>
 
@@ -114,6 +148,7 @@ document.addEventListener('DOMContentLoaded', function() {
     const originalSl = "1.5";
 
     function toggleRiskFields() {
+        if (!strategySelect) return;
         const selectedOption = strategySelect.options[strategySelect.selectedIndex];
         if (!selectedOption) return;
 
@@ -144,11 +179,62 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
 
-    strategySelect.addEventListener('change', toggleRiskFields);
-    
-    if (strategySelect.value) {
-        toggleRiskFields();
+    if (strategySelect) {
+        strategySelect.addEventListener('change', toggleRiskFields);
+        if (strategySelect.value) {
+            toggleRiskFields();
+        }
     }
+
+    // Live 25x Futures Calculation Logic
+    const capitalInput = document.getElementById('allocated_capital_input');
+    const symbolInput = document.querySelector('input[name="symbol"]');
+    const previewMargin = document.getElementById('preview_margin');
+    const previewBuyingPower = document.getElementById('preview_buying_power');
+    const previewLotSize = document.getElementById('preview_lot_size');
+
+    function updateLivePreview() {
+        const capital = parseFloat(capitalInput.value) || 0;
+        const buyingPower = capital * 25.0;
+        const rawSym = (symbolInput ? symbolInput.value : 'BTC/USDT').toUpperCase();
+
+        if (previewMargin) previewMargin.textContent = '$' + capital.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        if (previewBuyingPower) previewBuyingPower.textContent = '$' + buyingPower.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+        // Dynamic price estimation based on symbol
+        let approxPrice = 78500.0;
+        let isForex = false;
+
+        if (rawSym.includes('ETH')) {
+            approxPrice = 2650.0;
+        } else if (rawSym.includes('SOL')) {
+            approxPrice = 150.0;
+        } else if (rawSym.includes('EUR') || rawSym.includes('GBP') || rawSym.includes('AUD') || rawSym.includes('JPY')) {
+            isForex = true;
+        } else if (rawSym.includes('BTC')) {
+            approxPrice = 78500.0;
+        }
+
+        if (previewLotSize) {
+            if (isForex) {
+                // 1 Standard Lot = 100,000 Units
+                const lots = (buyingPower / 100000).toFixed(3);
+                previewLotSize.textContent = `~${lots} Lots`;
+            } else {
+                const coinQty = (buyingPower / approxPrice).toFixed(4);
+                const baseCoin = rawSym.split('/')[0] || 'BTC';
+                previewLotSize.textContent = `~${coinQty} ${baseCoin}`;
+            }
+        }
+    }
+
+    if (capitalInput) {
+        capitalInput.addEventListener('input', updateLivePreview);
+    }
+    if (symbolInput) {
+        symbolInput.addEventListener('input', updateLivePreview);
+    }
+    updateLivePreview();
 });
 </script>
 @endsection

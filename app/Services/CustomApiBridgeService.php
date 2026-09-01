@@ -389,4 +389,44 @@ class CustomApiBridgeService
     {
         return $this->fetchOrder($id, $symbol);
     }
+
+    /**
+     * Close position on broker
+     */
+    public function closePosition(string $symbol, ?float $amount = null, ?string $side = null)
+    {
+        try {
+            if ($this->broker === 'oanda') {
+                $url = $this->getUrl('trade/close');
+                $response = Http::timeout(5)->withHeaders($this->getHeaders())->post($url, [
+                    'symbol' => $symbol,
+                ]);
+
+                if ($response->successful() && is_array($response->json())) {
+                    $data = $response->json();
+                    $order = $data['order'] ?? [];
+                    return [
+                        'id' => $order['id'] ?? ('CLOSE-' . uniqid()),
+                        'symbol' => $symbol,
+                        'side' => $order['type'] ?? ($side ? (strtoupper($side) === 'LONG' ? 'SELL' : 'BUY') : 'SELL'),
+                        'type' => 'market',
+                        'price' => floatval($order['price'] ?? $this->fetchTicker($symbol)),
+                        'average' => floatval($order['price'] ?? $this->fetchTicker($symbol)),
+                        'amount' => floatval($order['amount'] ?? $amount ?? 0),
+                        'status' => 'closed',
+                        'realized_pnl' => floatval($data['realizedPnl'] ?? $order['realizedPnl'] ?? 0),
+                    ];
+                }
+            }
+        } catch (\Throwable $e) {
+            Log::warning("CustomApiBridgeService closePosition failed for {$symbol}: " . $e->getMessage());
+        }
+
+        if ($side && $amount) {
+            $closeSide = strtoupper($side) === 'LONG' ? 'sell' : 'buy';
+            return $this->createMarketOrder($symbol, $closeSide, $amount);
+        }
+
+        return null;
+    }
 }

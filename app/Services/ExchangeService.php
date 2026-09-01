@@ -96,6 +96,10 @@ class ExchangeService
 
     public function closePosition(string $symbol, ?float $amount = null, ?string $side = null)
     {
+        if (($this->isMetaApi || $this->isCustomApi) && is_callable([$this->client, 'closePosition'])) {
+            return $this->client->closePosition($symbol, $amount, $side);
+        }
+
         if ($amount && $amount > 0 && $side) {
             $closeSide = strtoupper($side) === 'LONG' ? 'sell' : 'buy';
             return $this->createMarketOrder($symbol, $closeSide, $amount);

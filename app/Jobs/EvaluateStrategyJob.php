@@ -204,10 +204,10 @@ class EvaluateStrategyJob implements ShouldQueue
                 if ($isClosingShort || $isClosingLong) {
                     // Send exact existing open position quantity to broker to ensure clean 0 balance on broker
                     $closeQuantity = $openPosition->quantity;
-                    $order = $exchangeService->createMarketOrder(
+                    $order = $exchangeService->closePosition(
                         $this->bot->symbol,
-                        strtolower($signal),
-                        $closeQuantity
+                        $closeQuantity,
+                        $openPosition->side
                     );
 
                     $execPrice = floatval($order['average'] ?? $order['price'] ?? $order['averagePrice'] ?? 0);

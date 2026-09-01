@@ -285,10 +285,10 @@ class TradeController extends Controller
             $exchangeService = new \App\Services\ExchangeService($bot->brokerAccount);
             $side = $position->side === 'LONG' ? 'sell' : 'buy';
             
-            $order = $exchangeService->createMarketOrder(
+            $order = $exchangeService->closePosition(
                 $position->symbol,
-                $side,
-                $position->quantity
+                $position->quantity,
+                $position->side
             );
 
             // Fetch execution price
@@ -382,10 +382,10 @@ class TradeController extends Controller
                 $exchangeService = new \App\Services\ExchangeService($bot->brokerAccount);
                 $side = $position->side === 'LONG' ? 'sell' : 'buy';
                 
-                $order = $exchangeService->createMarketOrder(
+                $order = $exchangeService->closePosition(
                     $position->symbol,
-                    $side,
-                    $position->quantity
+                    $position->quantity,
+                    $position->side
                 );
 
                 $execPrice = floatval($order['average'] ?? $order['price'] ?? $order['averagePrice'] ?? 0);

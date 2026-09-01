@@ -3,9 +3,11 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\SoftDeletes;
 
 class BotInstance extends Model
 {
+    use SoftDeletes;
     protected $fillable = [
         'user_id',
         'broker_account_id',
@@ -36,7 +38,7 @@ class BotInstance extends Model
 
     public function brokerAccount()
     {
-        return $this->belongsTo(BrokerAccount::class);
+        return $this->belongsTo(BrokerAccount::class)->withTrashed();
     }
 
     public function strategy()

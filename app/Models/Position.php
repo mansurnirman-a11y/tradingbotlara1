@@ -15,7 +15,7 @@ class Position extends Model
 
     public function botInstance()
     {
-        return $this->belongsTo(BotInstance::class);
+        return $this->belongsTo(BotInstance::class)->withTrashed();
     }
 
     public function user()

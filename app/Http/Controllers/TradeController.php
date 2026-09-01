@@ -437,4 +437,97 @@ class TradeController extends Controller
 
         return redirect()->back()->with('success', "Closed {$closedCount} positions and paused active bots." . ($failedCount > 0 ? " ({$failedCount} failed)" : ""));
     }
+
+    public function exportAuditReport(Request $request)
+    {
+        $user = Auth::user();
+        $query = Position::with(['botInstance.brokerAccount', 'user'])->orderBy('closed_at', 'desc')->orderBy('opened_at', 'desc');
+
+        if ($user && !in_array($user->role, ['admin', 'superadmin'])) {
+            $query->where('user_id', $user->id);
+        }
+
+        $filterStatus = $request->input('status', 'all');
+        if ($filterStatus === 'closed') {
+            $query->where('status', 'CLOSED');
+        } elseif ($filterStatus === 'open') {
+            $query->where('status', 'OPEN');
+        }
+
+        $positions = $query->get();
+        $filename = 'trading_audit_report_' . date('Y-m-d_His') . '.csv';
+
+        $headers = [
+            'Content-Type' => 'text/csv; charset=UTF-8',
+            'Content-Disposition' => "attachment; filename=\"{$filename}\"",
+            'Pragma' => 'no-cache',
+            'Cache-Control' => 'must-revalidate, post-check=0, pre-check=0',
+            'Expires' => '0',
+        ];
+
+        $callback = function () use ($positions) {
+            $file = fopen('php://output', 'w');
+            
+            // UTF-8 BOM for proper Excel rendering
+            fprintf($file, chr(0xEF).chr(0xBB).chr(0xBF));
+
+            // CSV Columns Header
+            fputcsv($file, [
+                'Position ID',
+                'User Name',
+                'User Email',
+                'Bot ID',
+                'Bot Name',
+                'Broker',
+                'Symbol',
+                'Type / Side',
+                'Lot Size (Qty)',
+                'Allocated Margin (USD)',
+                'Entry Price (USD)',
+                'Exit Price (USD)',
+                'Realized PnL (USD)',
+                'ROE (%)',
+                'Status',
+                'Opened At (UTC)',
+                'Closed At (UTC)',
+                'Duration (Minutes)',
+            ]);
+
+            foreach ($positions as $pos) {
+                $margin = floatval($pos->botInstance->allocated_capital ?? 0);
+                $pnl = floatval($pos->realized_pnl ?? 0);
+                $roe = ($margin > 0 && $pos->status === 'CLOSED') ? round(($pnl / $margin) * 100, 2) : 0;
+                
+                $duration = '-';
+                if ($pos->opened_at && $pos->closed_at) {
+                    $duration = round($pos->opened_at->diffInMinutes($pos->closed_at), 1);
+                }
+
+                fputcsv($file, [
+                    $pos->id,
+                    $pos->user->name ?? 'N/A',
+                    $pos->user->email ?? 'N/A',
+                    $pos->bot_instance_id,
+                    $pos->botInstance->name ?? ('Bot #' . $pos->bot_instance_id),
+                    strtoupper($pos->botInstance->brokerAccount->broker ?? 'N/A'),
+                    $pos->symbol,
+                    $pos->side,
+                    $pos->quantity,
+                    number_format($margin, 2, '.', ''),
+                    number_format((float)$pos->entry_price, 4, '.', ''),
+                    $pos->exit_price ? number_format((float)$pos->exit_price, 4, '.', '') : 'OPEN',
+                    $pos->realized_pnl !== null ? number_format((float)$pos->realized_pnl, 4, '.', '') : '0.00',
+                    $roe . '%',
+                    $pos->status,
+                    $pos->opened_at ? $pos->opened_at->format('Y-m-d H:i:s') : '',
+                    $pos->closed_at ? $pos->closed_at->format('Y-m-d H:i:s') : '',
+                    $duration,
+                ]);
+            }
+
+            fclose($file);
+        };
+
+        return response()->stream($callback, 200, $headers);
+    }
 }

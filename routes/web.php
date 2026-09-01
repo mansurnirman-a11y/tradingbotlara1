@@ -97,6 +97,7 @@ Route::middleware('auth')->group(function () {
     Route::post('/notifications/mark-all-read', [App\Http\Controllers\NotificationController::class, 'markAllAsRead'])->name('notifications.markAllAsRead');
 
     Route::get('/trades', [TradeController::class, 'index'])->name('trades.index');
+    Route::get('/trades/export-audit', [TradeController::class, 'exportAuditReport'])->name('trades.export_audit');
     Route::post('/trades/live-pnl', [TradeController::class, 'getLivePnl'])->name('trades.live_pnl');
     Route::post('/trades/close-all', [TradeController::class, 'closeAll'])->name('trades.close_all');
     Route::post('/trades/{position}/close', [TradeController::class, 'closePosition'])->name('trades.close');

@@ -92,7 +92,14 @@
             <h1 style="font-size: 2.5rem; margin: 0; font-weight: 800; letter-spacing: -0.5px;">Positions <span class="text-gradient">Ledger</span></h1>
             <p class="text-secondary" style="margin-top: 0.5rem; font-size: 1rem;">Live monitoring of open positions and historical trade audit</p>
         </div>
-        <div style="display: flex; gap: 1rem;">
+        <div style="display: flex; flex-wrap: wrap; gap: 1rem; align-items: center;">
+            <a href="{{ route('trades.export_audit') }}" class="glass-panel" style="padding: 0.75rem 1.25rem; border-radius: 12px; display: flex; align-items: center; gap: 0.75rem; text-decoration: none; color: #fff; background: rgba(0, 240, 255, 0.08); border: 1px solid rgba(0, 240, 255, 0.3); transition: all 0.2s ease;" onmouseover="this.style.background='rgba(0, 240, 255, 0.18)'" onmouseout="this.style.background='rgba(0, 240, 255, 0.08)'" title="Export full trade & account audit report to CSV / Excel">
+                <i class="fas fa-file-excel" style="color: var(--accent-green); font-size: 1.25rem;"></i>
+                <div>
+                    <div style="font-size: 0.7rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.5px;">Account Ledger</div>
+                    <div style="font-size: 0.95rem; font-weight: 700; color: #fff;">📥 Export Audit CSV</div>
+                </div>
+            </a>
             <div class="glass-panel" style="padding: 0.75rem 1.25rem; border-radius: 12px; display: flex; align-items: center; gap: 0.75rem;">
                 <span style="height: 10px; width: 10px; background-color: var(--accent-green); border-radius: 50%; display: inline-block; box-shadow: 0 0 10px var(--accent-green); animation: pulse-green 2s infinite;"></span>
                 <div>
@@ -250,9 +257,14 @@
                 <h3 style="margin: 0; font-size: 1.3rem; font-weight: 700;">📜 Closed Position <span class="text-gradient">History</span></h3>
                 <p class="text-secondary" style="margin: 0.25rem 0 0 0; font-size: 0.85rem;">Historical trade settlements and realized profit/loss</p>
             </div>
-            <span class="badge-closed">
-                {{ $closedPositions->total() }} Total Records
-            </span>
+            <div style="display: flex; align-items: center; gap: 0.75rem;">
+                <a href="{{ route('trades.export_audit', ['status' => 'closed']) }}" class="btn-close-pos" style="background: rgba(0, 230, 118, 0.1); color: var(--accent-green); border-color: rgba(0, 230, 118, 0.3); text-decoration: none;" title="Download closed trade audit ledger as CSV/Excel">
+                    <i class="fas fa-download"></i> Download History CSV
+                </a>
+                <span class="badge-closed">
+                    {{ $closedPositions->total() }} Total Records
+                </span>
+            </div>
         </div>
 
         @if($closedPositions->count() > 0)

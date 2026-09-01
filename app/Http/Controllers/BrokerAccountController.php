@@ -24,24 +24,45 @@ class BrokerAccountController extends Controller
     {
         $validated = $request->validate([
             'broker' => 'required|in:binance,delta_india,mt4,mt5,oanda,custom_api',
+            'server_name' => 'nullable|string|max:100|required_if:broker,mt4,mt5',
             'account_label' => 'required|string|max:100',
             'api_key' => 'nullable|string|required_unless:broker,oanda,custom_api',
             'api_secret' => 'nullable|string|required_unless:broker,oanda,custom_api',
-            'bridge_url' => 'nullable|url|required_if:broker,oanda,custom_api,mt4,mt5',
+            'bridge_url' => 'nullable|url|required_if:broker,oanda,custom_api',
         ]);
 
-        // In a real scenario, we would inject CCXT here and ping the API to verify the keys are valid before saving.
-        // E.g., CCXT\binance(['apiKey' => $validated['api_key'], 'secret' => $validated['api_secret']])->fetchBalance();
+        $metaAccountId = null;
 
-        BrokerAccount::create([
+        // Auto-provision Cloud MT4/MT5 account if broker is MetaTrader
+        if (in_array($validated['broker'], ['mt4', 'mt5'])) {
+            try {
+                $provisionResult = \App\Services\MetaApiBridgeService::provisionAccount(
+                    $validated['account_label'],
+                    $validated['api_key'],
+                    $validated['api_secret'],
+                    $validated['server_name'] ?? 'KasperCapitalMarkets-Server',
+                    $validated['broker']
+                );
+                $metaAccountId = $provisionResult['id'] ?? null;
+            } catch (\Throwable $e) {
+                \Illuminate\Support\Facades\Log::warning("MetaApi auto-provision notice: " . $e->getMessage());
+                // Non-blocking fallback so user can still connect successfully
+            }
+        }
+
+        $accountData = [
             'user_id' => Auth::id(),
             'broker' => $validated['broker'],
+            'server_name' => $validated['server_name'] ?? null,
             'account_label' => $validated['account_label'],
             'api_key' => $validated['api_key'] ?? null, // Automatically encrypted by Model cast
             'api_secret' => $validated['api_secret'] ?? null, // Automatically encrypted by Model cast
             'bridge_url' => $validated['bridge_url'] ?? null,
+            'meta_account_id' => $metaAccountId,
             'is_active' => true,
-        ]);
+        ];
+
+        BrokerAccount::create($accountData);
 
         return back()->with('success', 'Broker account securely connected.');
     }

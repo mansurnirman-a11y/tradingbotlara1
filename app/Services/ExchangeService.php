@@ -211,12 +211,34 @@ class ExchangeService
         return 25.0;
     }
 
+    public function getOpenPositions()
+    {
+        try {
+            if ($this->isMetaApi || $this->isCustomApi) {
+                if (is_callable([$this->client, 'getOpenPositions'])) {
+                    return $this->client->getOpenPositions();
+                }
+                return [];
+            }
+
+            if (is_callable([$this->client, 'fetch_positions'])) {
+                return $this->client->fetch_positions();
+            }
+            if (is_callable([$this->client, 'fetchPositions'])) {
+                return $this->client->fetchPositions();
+            }
+            return [];
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::warning("ExchangeService getOpenPositions error: " . $e->getMessage());
+            return [];
+        }
+    }
+
     public function fetchBalance()
     {
         try {
             if ($this->isMetaApi) {
-                // MetaApi implementation if supported, else return empty
-                return ['USDT' => ['free' => 0, 'used' => 0, 'total' => 0]];
+                return $this->client->fetchBalance();
             }
             if ($this->isCustomApi) {
                 return $this->client->fetchBalance();

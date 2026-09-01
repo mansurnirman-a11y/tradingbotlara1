@@ -50,6 +50,22 @@
                     </select>
                 </div>
 
+                <div class="form-group" id="server-name-group" style="display: none;">
+                    <label class="form-label" id="server-name-label">Broker Server Name <span style="color: var(--accent-red);">*</span></label>
+                    <input type="text" name="server_name" id="server_name" class="form-input" list="server-list" placeholder="e.g. KasperCapitalMarkets-Server or Exness-Real">
+                    <datalist id="server-list">
+                        <option value="KasperCapitalMarkets-Server">Kasper Capital Markets (Live)</option>
+                        <option value="KasperCapitalMarkets-Demo">Kasper Capital Markets (Demo)</option>
+                        <option value="Exness-Real">Exness Real</option>
+                        <option value="Exness-Real2">Exness Real 2</option>
+                        <option value="XMGlobal-Real">XM Global Real</option>
+                        <option value="ICMarketsSC-Live01">IC Markets Live</option>
+                        <option value="OctaFX-Real">OctaFX Real</option>
+                        <option value="FBS-Real">FBS Real</option>
+                    </datalist>
+                    <small class="text-secondary" style="font-size: 0.78rem; display: block; margin-top: 0.25rem;">Exact server name provided by your broker.</small>
+                </div>
+
                 <div class="form-group" id="bridge-url-group" style="display: none;">
                     <label class="form-label">API/Bridge URL <span style="color: var(--accent-red);">*</span></label>
                     <input type="url" name="bridge_url" id="bridge_url" class="form-input" placeholder="e.g. http://localhost:8000 or https://api.custombroker.com">
@@ -57,16 +73,16 @@
 
                 <div class="form-group">
                     <label class="form-label">Account Label</label>
-                    <input type="text" name="account_label" class="form-input" required placeholder="e.g. My Binance Main">
+                    <input type="text" name="account_label" class="form-input" required placeholder="e.g. My Main Account">
                 </div>
 
                 <div class="form-group">
-                    <label class="form-label">API Key <span class="api-key-required" style="color: var(--accent-red);">*</span></label>
+                    <label class="form-label" id="api-key-label">API Key <span class="api-key-required" style="color: var(--accent-red);">*</span></label>
                     <input type="password" name="api_key" id="api_key" class="form-input" placeholder="Paste your API Key">
                 </div>
 
                 <div class="form-group" style="margin-bottom: 2rem;">
-                    <label class="form-label">API Secret <span class="api-secret-required" style="color: var(--accent-red);">*</span></label>
+                    <label class="form-label" id="api-secret-label">API Secret <span class="api-secret-required" style="color: var(--accent-red);">*</span></label>
                     <input type="password" name="api_secret" id="api_secret" class="form-input" placeholder="Paste your API Secret">
                 </div>
 
@@ -93,7 +109,12 @@
                         <tbody>
                             @foreach($accounts as $acc)
                             <tr style="border-bottom: 1px solid rgba(255,255,255,0.02);">
-                                <td style="padding: 1rem; text-transform: capitalize;">{{ str_replace('_', ' ', $acc->broker) }}</td>
+                                <td style="padding: 1rem; text-transform: capitalize;">
+                                    <strong>{{ str_replace('_', ' ', $acc->broker) }}</strong>
+                                    @if($acc->server_name)
+                                        <br><span style="font-size: 0.78rem; color: var(--text-secondary);">Server: {{ $acc->server_name }}</span>
+                                    @endif
+                                </td>
                                 <td style="padding: 1rem;">{{ $acc->account_label }}</td>
                                 <td style="padding: 1rem;">
                                     @if($acc->is_active)
@@ -222,8 +243,12 @@
     <script>
     document.addEventListener('DOMContentLoaded', function() {
         const brokerSelect = document.querySelector('select[name="broker"]');
+        const serverNameGroup = document.getElementById('server-name-group');
+        const serverNameInput = document.getElementById('server_name');
         const bridgeUrlGroup = document.getElementById('bridge-url-group');
         const bridgeUrlInput = document.getElementById('bridge_url');
+        const apiKeyLabel = document.getElementById('api-key-label');
+        const apiSecretLabel = document.getElementById('api-secret-label');
         const apiKeyInput = document.getElementById('api_key');
         const apiSecretInput = document.getElementById('api_secret');
         const apiKeyRequiredStar = document.querySelector('.api-key-required');
@@ -231,25 +256,63 @@
 
         function toggleBrokerFields() {
             const val = brokerSelect.value;
-            if (['mt4', 'mt5', 'oanda', 'custom_api'].includes(val)) {
-                bridgeUrlGroup.style.display = 'block';
-                bridgeUrlInput.setAttribute('required', 'required');
-            } else {
+
+            // MT4 / MT5 Cloud Mode
+            if (val === 'mt4' || val === 'mt5') {
+                serverNameGroup.style.display = 'block';
+                serverNameInput.setAttribute('required', 'required');
+
                 bridgeUrlGroup.style.display = 'none';
                 bridgeUrlInput.removeAttribute('required');
                 bridgeUrlInput.value = '';
-            }
 
-            if (['oanda', 'custom_api'].includes(val)) {
-                // Key/Secret are optional for local/custom connections
+                apiKeyLabel.innerHTML = (val === 'mt5' ? 'MT5' : 'MT4') + ' Login / Account Number <span class="api-key-required" style="color: var(--accent-red);">*</span>';
+                apiKeyInput.placeholder = 'e.g. 12345678';
+                apiKeyInput.setAttribute('required', 'required');
+
+                apiSecretLabel.innerHTML = (val === 'mt5' ? 'MT5' : 'MT4') + ' Trading Password <span class="api-secret-required" style="color: var(--accent-red);">*</span>';
+                apiSecretInput.placeholder = 'Enter trading password';
+                apiSecretInput.setAttribute('required', 'required');
+
+                if (apiKeyRequiredStar) apiKeyRequiredStar.style.display = 'inline';
+                if (apiSecretRequiredStar) apiSecretRequiredStar.style.display = 'inline';
+            } 
+            // Custom API / Oanda Mode
+            else if (['oanda', 'custom_api'].includes(val)) {
+                serverNameGroup.style.display = 'none';
+                serverNameInput.removeAttribute('required');
+
+                bridgeUrlGroup.style.display = 'block';
+                bridgeUrlInput.setAttribute('required', 'required');
+
+                apiKeyLabel.innerHTML = 'API Key (Optional)';
+                apiKeyInput.placeholder = 'Paste your API Key (if required)';
                 apiKeyInput.removeAttribute('required');
+
+                apiSecretLabel.innerHTML = 'API Secret (Optional)';
+                apiSecretInput.placeholder = 'Paste your API Secret (if required)';
                 apiSecretInput.removeAttribute('required');
+
                 if (apiKeyRequiredStar) apiKeyRequiredStar.style.display = 'none';
                 if (apiSecretRequiredStar) apiSecretRequiredStar.style.display = 'none';
-            } else {
-                // Required for binance, delta_india, mt4, mt5
+            } 
+            // Crypto Exchanges (Binance / Delta)
+            else {
+                serverNameGroup.style.display = 'none';
+                serverNameInput.removeAttribute('required');
+
+                bridgeUrlGroup.style.display = 'none';
+                bridgeUrlInput.removeAttribute('required');
+                bridgeUrlInput.value = '';
+
+                apiKeyLabel.innerHTML = 'API Key <span class="api-key-required" style="color: var(--accent-red);">*</span>';
+                apiKeyInput.placeholder = 'Paste your API Key';
                 apiKeyInput.setAttribute('required', 'required');
+
+                apiSecretLabel.innerHTML = 'API Secret <span class="api-secret-required" style="color: var(--accent-red);">*</span>';
+                apiSecretInput.placeholder = 'Paste your API Secret';
                 apiSecretInput.setAttribute('required', 'required');
+
                 if (apiKeyRequiredStar) apiKeyRequiredStar.style.display = 'inline';
                 if (apiSecretRequiredStar) apiSecretRequiredStar.style.display = 'inline';
             }

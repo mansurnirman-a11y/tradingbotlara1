@@ -11,6 +11,7 @@ class BrokerAccount extends Model
     protected $fillable = [
         'user_id',
         'broker',
+        'server_name',
         'account_label',
         'api_key',
         'api_secret',

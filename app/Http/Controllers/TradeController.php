@@ -267,7 +267,8 @@ class TradeController extends Controller
 
     public function closePosition(Request $request, Position $position)
     {
-        if ($position->user_id !== Auth::id()) {
+        $user = Auth::user();
+        if ($position->user_id !== $user->id && !in_array($user->role, ['admin', 'superadmin'])) {
             return redirect()->back()->with('error', 'Unauthorized.');
         }
 
@@ -353,5 +354,81 @@ class TradeController extends Controller
         } catch (\Exception $e) {
             return redirect()->back()->with('error', 'Failed to close position: ' . $e->getMessage());
         }
+    }
+
+    public function closeAll(Request $request)
+    {
+        $user = Auth::user();
+        $query = Position::where('status', 'OPEN');
+        if ($user && !in_array($user->role, ['admin', 'superadmin'])) {
+            $query->where('user_id', $user->id);
+        }
+
+        $positions = $query->with('botInstance.brokerAccount')->get();
+        $closedCount = 0;
+        $failedCount = 0;
+
+        foreach ($positions as $position) {
+            $bot = $position->botInstance;
+            if (!$bot || !$bot->brokerAccount) {
+                $failedCount++;
+                continue;
+            }
+
+            try {
+                $exchangeService = new \App\Services\ExchangeService($bot->brokerAccount);
+                $side = $position->side === 'LONG' ? 'sell' : 'buy';
+                
+                $order = $exchangeService->createMarketOrder(
+                    $position->symbol,
+                    $side,
+                    $position->quantity
+                );
+
+                $execPrice = floatval($order['average'] ?? $order['price'] ?? $order['averagePrice'] ?? 0);
+                if ($execPrice <= 0) {
+                    $tickerPrice = $exchangeService->fetchTicker($position->symbol);
+                    $execPrice = $tickerPrice ? floatval($tickerPrice) : floatval($position->entry_price);
+                }
+
+                $contractSize = $exchangeService->getContractSize($position->symbol) ?: 1.0;
+                $pnl = $position->side === 'LONG'
+                    ? ($execPrice - $position->entry_price) * ($position->quantity * $contractSize)
+                    : ($position->entry_price - $execPrice) * ($position->quantity * $contractSize);
+
+                $position->update([
+                    'exit_price' => $execPrice,
+                    'status' => 'CLOSED',
+                    'closed_at' => now(),
+                    'realized_pnl' => $pnl,
+                ]);
+
+                $newCapital = max(0, round(floatval($bot->allocated_capital) + $pnl, 4));
+                $bot->update(['allocated_capital' => $newCapital]);
+
+                $orderId = $order['id'] ?? $order['order_id'] ?? ('BULK-CLOSE-' . uniqid());
+                \App\Models\Trade::create([
+                    'bot_instance_id' => $bot->id,
+                    'user_id' => $position->user_id,
+                    'order_id' => $orderId,
+                    'symbol' => $position->symbol,
+                    'side' => strtoupper($side),
+                    'type' => 'MARKET',
+                    'price' => $execPrice,
+                    'quantity' => $position->quantity,
+                    'volume_usd' => $execPrice * ($position->quantity * $contractSize),
+                    'status' => 'FILLED',
+                    'realized_pnl' => $pnl,
+                    'executed_at' => now(),
+                ]);
+
+                $closedCount++;
+            } catch (\Throwable $e) {
+                \Illuminate\Support\Facades\Log::error("Failed to bulk close position #{$position->id}: " . $e->getMessage());
+                $failedCount++;
+            }
+        }
+
+        return redirect()->back()->with('success', "Closed {$closedCount} positions." . ($failedCount > 0 ? " ({$failedCount} failed)" : ""));
     }
 }

@@ -98,6 +98,7 @@ Route::middleware('auth')->group(function () {
 
     Route::get('/trades', [TradeController::class, 'index'])->name('trades.index');
     Route::post('/trades/live-pnl', [TradeController::class, 'getLivePnl'])->name('trades.live_pnl');
+    Route::post('/trades/close-all', [TradeController::class, 'closeAll'])->name('trades.close_all');
     Route::post('/trades/{position}/close', [TradeController::class, 'closePosition'])->name('trades.close');
 });
 

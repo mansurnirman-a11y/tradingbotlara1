@@ -122,7 +122,17 @@
                 </span>
                 <span style="font-size: 0.9rem; color: var(--text-secondary);">({{ $openPositions->count() }} In Trade)</span>
             </div>
-            <span style="font-size: 0.8rem; color: var(--text-secondary);">Live PnL updates every 10s</span>
+            <div style="display: flex; align-items: center; gap: 1rem;">
+                @if($openPositions->count() > 0 && in_array(Auth::user()->role ?? '', ['admin', 'superadmin']))
+                    <form action="{{ route('trades.close_all') }}" method="POST" onsubmit="return confirm('WARNING: Are you sure you want to FORCE CLOSE ALL active positions across all users?');" style="margin: 0;">
+                        @csrf
+                        <button type="submit" class="btn-close-pos" style="background: rgba(255, 60, 60, 0.2); border-color: rgba(255, 60, 60, 0.5);">
+                            <i class="fas fa-radiation"></i> Close All Positions
+                        </button>
+                    </form>
+                @endif
+                <span style="font-size: 0.8rem; color: var(--text-secondary);">Live PnL updates every 10s</span>
+            </div>
         </div>
 
         @if($openPositions->count() > 0)
@@ -131,6 +141,9 @@
                     <thead>
                         <tr style="border-bottom: 1px solid rgba(0, 240, 255, 0.2);">
                             <th style="padding: 1rem; color: var(--text-secondary); font-weight: 600; font-size: 0.85rem;">Opened At</th>
+                            @if(in_array(Auth::user()->role ?? '', ['admin', 'superadmin']))
+                                <th style="padding: 1rem; color: var(--text-secondary); font-weight: 600; font-size: 0.85rem;">User</th>
+                            @endif
                             <th style="padding: 1rem; color: var(--text-secondary); font-weight: 600; font-size: 0.85rem;">Bot ID</th>
                             <th style="padding: 1rem; color: var(--text-secondary); font-weight: 600; font-size: 0.85rem;">Pair</th>
                             <th style="padding: 1rem; color: var(--text-secondary); font-weight: 600; font-size: 0.85rem;">Type</th>
@@ -146,6 +159,13 @@
                             <td style="padding: 1rem; color: var(--text-secondary); font-size: 0.875rem;">
                                 {{ $position->opened_at->format('M d, H:i:s') }}
                             </td>
+                            @if(in_array(Auth::user()->role ?? '', ['admin', 'superadmin']))
+                            <td style="padding: 1rem; font-size: 0.85rem;">
+                                <span style="background: rgba(0, 240, 255, 0.1); color: var(--accent-cyan); padding: 0.2rem 0.5rem; border-radius: 4px; font-weight: 600;">
+                                    {{ $position->user->name ?? 'User #' . $position->user_id }}
+                                </span>
+                            </td>
+                            @endif
                             <td style="padding: 1rem; font-family: monospace;">
                                 <span style="background: rgba(255,255,255,0.08); padding: 0.2rem 0.5rem; border-radius: 6px;" title="{{ $position->botInstance->name ?? 'Bot #' . $position->bot_instance_id }}">
                                     #{{ str_pad($position->bot_instance_id, 4, '0', STR_PAD_LEFT) }}
@@ -241,6 +261,9 @@
                     <thead>
                         <tr style="border-bottom: 1px solid var(--border-glass);">
                             <th style="padding: 1rem; color: var(--text-secondary); font-weight: 600; font-size: 0.85rem;">Opened At</th>
+                            @if(in_array(Auth::user()->role ?? '', ['admin', 'superadmin']))
+                                <th style="padding: 1rem; color: var(--text-secondary); font-weight: 600; font-size: 0.85rem;">User</th>
+                            @endif
                             <th style="padding: 1rem; color: var(--text-secondary); font-weight: 600; font-size: 0.85rem;">Bot ID</th>
                             <th style="padding: 1rem; color: var(--text-secondary); font-weight: 600; font-size: 0.85rem;">Pair</th>
                             <th style="padding: 1rem; color: var(--text-secondary); font-weight: 600; font-size: 0.85rem;">Type</th>
@@ -257,6 +280,13 @@
                             <td style="padding: 1rem; color: var(--text-secondary); font-size: 0.875rem;">
                                 {{ $position->opened_at ? $position->opened_at->format('M d, H:i') : '-' }}
                             </td>
+                            @if(in_array(Auth::user()->role ?? '', ['admin', 'superadmin']))
+                            <td style="padding: 1rem; font-size: 0.85rem;">
+                                <span style="background: rgba(0, 240, 255, 0.1); color: var(--accent-cyan); padding: 0.2rem 0.5rem; border-radius: 4px; font-weight: 600;">
+                                    {{ $position->user->name ?? 'User #' . $position->user_id }}
+                                </span>
+                            </td>
+                            @endif
                             <td style="padding: 1rem; font-family: monospace;">
                                 <span style="background: rgba(255,255,255,0.05); padding: 0.2rem 0.5rem; border-radius: 6px;" title="{{ $position->botInstance->name ?? 'Bot #' . $position->bot_instance_id }}">
                                     #{{ str_pad($position->bot_instance_id, 4, '0', STR_PAD_LEFT) }}

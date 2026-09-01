@@ -291,25 +291,29 @@ class TradeController extends Controller
             );
 
             // Fetch execution price
-            $execPrice = $order['average'] ?? $order['price'] ?? null;
-            if (!$execPrice || floatval($execPrice) == 0) {
+            $execPrice = floatval($order['average'] ?? $order['price'] ?? $order['averagePrice'] ?? 0);
+            if ($execPrice <= 0) {
                 try {
-                    sleep(1);
-                    $fetchedOrder = $exchangeService->getClient()->fetchOrder($order['id'], $position->symbol);
-                    $execPrice = $fetchedOrder['average'] ?? $fetchedOrder['price'] ?? 0;
-                } catch (\Exception $e) {
-                    $execPrice = 0; // Fallback
+                    $client = $exchangeService->getClient();
+                    if (is_callable([$client, 'fetchOrder']) || is_callable([$client, 'fetch_order'])) {
+                        $fetchedOrder = is_callable([$client, 'fetch_order'])
+                            ? $client->fetch_order($order['id'] ?? '', $position->symbol)
+                            : $client->fetchOrder($order['id'] ?? '', $position->symbol);
+                        $execPrice = floatval($fetchedOrder['average'] ?? $fetchedOrder['price'] ?? 0);
+                    }
+                } catch (\Throwable $e) {
+                    $execPrice = 0;
                 }
             }
 
             // Fallback to ticker if still zero
-            if (!$execPrice || floatval($execPrice) == 0) {
-                $ticker = $exchangeService->getClient()->fetchTicker($position->symbol);
-                $execPrice = $ticker['last'] ?? $position->entry_price;
+            if ($execPrice <= 0) {
+                $tickerPrice = $exchangeService->fetchTicker($position->symbol);
+                $execPrice = $tickerPrice ? floatval($tickerPrice) : floatval($position->entry_price);
             }
 
             // Calculate Realized PNL
-            $contractSize = $exchangeService->getContractSize($position->symbol);
+            $contractSize = $exchangeService->getContractSize($position->symbol) ?: 1.0;
             $pnl = 0;
             if ($position->side === 'LONG') {
                 $pnl = ($execPrice - $position->entry_price) * ($position->quantity * $contractSize);
@@ -322,6 +326,27 @@ class TradeController extends Controller
                 'status' => 'CLOSED',
                 'closed_at' => now(),
                 'realized_pnl' => $pnl,
+            ]);
+
+            // Update bot capital
+            $newCapital = max(0, round(floatval($bot->allocated_capital) + $pnl, 4));
+            $bot->update(['allocated_capital' => $newCapital]);
+
+            // Record Trade entry
+            $orderId = $order['id'] ?? $order['order_id'] ?? ('MANUAL-CLOSE-' . uniqid());
+            \App\Models\Trade::create([
+                'bot_instance_id' => $bot->id,
+                'user_id' => $position->user_id,
+                'order_id' => $orderId,
+                'symbol' => $position->symbol,
+                'side' => strtoupper($side),
+                'type' => 'MARKET',
+                'price' => $execPrice,
+                'quantity' => $position->quantity,
+                'volume_usd' => $execPrice * ($position->quantity * $contractSize),
+                'status' => 'FILLED',
+                'realized_pnl' => $pnl,
+                'executed_at' => now(),
             ]);
 
             return redirect()->back()->with('success', 'Position closed successfully.');

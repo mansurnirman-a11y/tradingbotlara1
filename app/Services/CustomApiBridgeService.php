@@ -370,4 +370,23 @@ class CustomApiBridgeService
         }
         return $formatted;
     }
+
+    /**
+     * Fetch Order status / details
+     */
+    public function fetchOrder(string $id, ?string $symbol = null)
+    {
+        return [
+            'id' => $id,
+            'symbol' => $symbol,
+            'status' => 'closed',
+            'average' => $symbol ? $this->fetchTicker($symbol) : null,
+            'price' => $symbol ? $this->fetchTicker($symbol) : null,
+        ];
+    }
+
+    public function fetch_order(string $id, ?string $symbol = null)
+    {
+        return $this->fetchOrder($id, $symbol);
+    }
 }

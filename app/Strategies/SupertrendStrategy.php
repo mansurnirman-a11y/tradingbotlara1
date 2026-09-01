@@ -45,17 +45,6 @@ class SupertrendStrategy implements StrategyInterface
             return 'SELL'; // Fresh Bearish Supertrend Signal
         }
 
-        // Trend-Following Re-Entry:
-        // If bullish trend continues, maintain BUY
-        if ($current['direction'] === 1) {
-            return 'BUY';
-        }
-
-        // If bearish trend continues, maintain SELL
-        if ($current['direction'] === -1) {
-            return 'SELL';
-        }
-
         return 'HOLD';
     }
 

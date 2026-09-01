@@ -329,9 +329,12 @@ class TradeController extends Controller
                 'realized_pnl' => $pnl,
             ]);
 
-            // Update bot capital
+            // Update bot capital and pause bot to prevent auto re-entry
             $newCapital = max(0, round(floatval($bot->allocated_capital) + $pnl, 4));
-            $bot->update(['allocated_capital' => $newCapital]);
+            $bot->update([
+                'allocated_capital' => $newCapital,
+                'status' => 'stopped'
+            ]);
 
             // Record Trade entry
             $orderId = $order['id'] ?? $order['order_id'] ?? ('MANUAL-CLOSE-' . uniqid());
@@ -350,7 +353,7 @@ class TradeController extends Controller
                 'executed_at' => now(),
             ]);
 
-            return redirect()->back()->with('success', 'Position closed successfully.');
+            return redirect()->back()->with('success', "Position closed successfully and Bot #{$bot->id} paused.");
         } catch (\Exception $e) {
             return redirect()->back()->with('error', 'Failed to close position: ' . $e->getMessage());
         }
@@ -404,7 +407,10 @@ class TradeController extends Controller
                 ]);
 
                 $newCapital = max(0, round(floatval($bot->allocated_capital) + $pnl, 4));
-                $bot->update(['allocated_capital' => $newCapital]);
+                $bot->update([
+                    'allocated_capital' => $newCapital,
+                    'status' => 'stopped'
+                ]);
 
                 $orderId = $order['id'] ?? $order['order_id'] ?? ('BULK-CLOSE-' . uniqid());
                 \App\Models\Trade::create([
@@ -429,6 +435,6 @@ class TradeController extends Controller
             }
         }
 
-        return redirect()->back()->with('success', "Closed {$closedCount} positions." . ($failedCount > 0 ? " ({$failedCount} failed)" : ""));
+        return redirect()->back()->with('success', "Closed {$closedCount} positions and paused active bots." . ($failedCount > 0 ? " ({$failedCount} failed)" : ""));
     }
 }

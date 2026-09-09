@@ -609,9 +609,13 @@
                             <td style="font-family: monospace; font-size: 0.95rem; font-weight: 600; color: #fff;">
                                 ${{ number_format($pos->entry_price, 2) }}
                             </td>
+                            @php
+                                $posMargin = $pos->margin_used ?? $pos->botInstance->allocated_capital ?? (($pos->quantity * $pos->entry_price) / ($pos->botInstance->parameters['leverage'] ?? 25));
+                                $posValue = $pos->trade_value ?? ($pos->quantity * $pos->entry_price);
+                            @endphp
                             <td>
-                                <strong style="color: #fff;">${{ number_format($pos->margin_used ?? 0, 2) }}</strong>
-                                <div style="font-size: 0.72rem; color: var(--text-secondary);">Value: ${{ number_format($pos->trade_value ?? 0, 2) }}</div>
+                                <strong style="color: #fff;">${{ number_format($posMargin, 2) }}</strong>
+                                <div style="font-size: 0.72rem; color: var(--text-secondary);">Value: ${{ number_format($posValue, 2) }}</div>
                             </td>
                             <td style="text-align: right;">
                                 <div style="display: flex; gap: 0.5rem; justify-content: flex-end; align-items: center; flex-wrap: wrap;">

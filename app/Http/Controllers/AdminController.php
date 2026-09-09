@@ -89,10 +89,14 @@ class AdminController extends Controller
 
     public function updateUser(Request $request, User $user)
     {
+        if ($request->input('is_active') === 'delete') {
+            return $this->deleteUser($request, $user);
+        }
+
         $request->validate([
             'role' => 'nullable|in:user,admin,superadmin',
             'max_bots' => 'required|integer|min:0',
-            'is_active' => 'required|in:0,1',
+            'is_active' => 'required|in:0,1,delete',
         ]);
 
         $user->update([

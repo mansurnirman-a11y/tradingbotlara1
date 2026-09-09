@@ -747,31 +747,20 @@
                             </td>
                             <td style="text-align: right;">
                                 @if($u->id !== Auth::id())
-                                <div style="display: flex; flex-direction: column; gap: 0.5rem; align-items: flex-end;">
-                                    <form method="POST" action="{{ route('admin.users.update', $u->id) }}" style="display: flex; gap: 0.4rem; align-items: center; margin: 0;">
-                                        @csrf
-                                        <select name="is_active" class="form-input" style="width: auto; padding: 0.35rem 0.6rem; font-size: 0.8rem; border-radius: 6px; background: rgba(0,0,0,0.4);">
-                                            <option value="1" {{ $u->is_active ? 'selected' : '' }}>Approved</option>
-                                            <option value="0" {{ !$u->is_active ? 'selected' : '' }}>Suspended</option>
-                                        </select>
-                                        <input type="number" name="max_bots" value="{{ $u->max_bots }}" class="form-input" style="width: 60px; padding: 0.35rem 0.5rem; font-size: 0.8rem; border-radius: 6px; background: rgba(0,0,0,0.4);" title="Max Bots Limit">
-                                        <button type="submit" class="btn-ctrl-pause" style="padding: 0.35rem 0.75rem; font-size: 0.78rem;">
-                                            Save
-                                        </button>
-                                    </form>
-                                    
-                                    @if(in_array(Auth::user()->role ?? '', ['superadmin', 'admin']) && $u->role !== 'superadmin')
-                                    <form method="POST" action="{{ route('admin.users.delete', $u->id) }}"
-                                          onsubmit="return confirm('🚨 WARNING: Delete user \'{{ addslashes($u->name) }}\'?\n\nThis will PERMANENTLY delete:\n• All their bots\n• All positions & trade history\n• All broker accounts\n\nThis action CANNOT be undone. Are you absolutely sure?');"
-                                          style="margin: 0; width: 100%;">
-                                        @csrf
-                                        @method('DELETE')
-                                        <button type="submit" class="btn-ctrl-del" style="width: 100%; justify-content: center; padding: 0.35rem 0.75rem;">
-                                            <i class="fas fa-user-times"></i> Delete Account
-                                        </button>
-                                    </form>
-                                    @endif
-                                </div>
+                                <form method="POST" action="{{ route('admin.users.update', $u->id) }}" onsubmit="if(this.is_active.value === 'delete') { return confirm('🚨 DANGER: Are you sure you want to PERMANENTLY delete user \'{{ addslashes($u->name) }}\'?\n\nThis will remove all bots, broker accounts, open positions and trade records.\n\nThis action CANNOT be undone.'); }" style="display: flex; gap: 0.4rem; align-items: center; justify-content: flex-end; margin: 0;">
+                                    @csrf
+                                    <select name="is_active" class="form-input" style="width: auto; padding: 0.35rem 0.6rem; font-size: 0.8rem; border-radius: 6px; background: rgba(0,0,0,0.5); color: #fff; border: 1px solid rgba(255,255,255,0.15);">
+                                        <option value="1" {{ $u->is_active ? 'selected' : '' }}>Approved</option>
+                                        <option value="0" {{ !$u->is_active ? 'selected' : '' }}>Suspended</option>
+                                        @if(in_array(Auth::user()->role ?? '', ['superadmin', 'admin']) && $u->role !== 'superadmin')
+                                            <option value="delete" style="color: #ff5252; background: #2a1115; font-weight: bold;">🗑️ Delete User</option>
+                                        @endif
+                                    </select>
+                                    <input type="number" name="max_bots" value="{{ $u->max_bots }}" class="form-input" style="width: 55px; padding: 0.35rem 0.4rem; font-size: 0.8rem; border-radius: 6px; background: rgba(0,0,0,0.5); color: #fff; border: 1px solid rgba(255,255,255,0.15); text-align: center;" title="Max Bots Limit">
+                                    <button type="submit" class="btn-ctrl-pause" style="padding: 0.35rem 0.75rem; font-size: 0.78rem;">
+                                        Save
+                                    </button>
+                                </form>
                                 @else
                                     <span style="color: var(--text-secondary); font-size: 0.8rem; font-style: italic;">Active Session (You)</span>
                                 @endif

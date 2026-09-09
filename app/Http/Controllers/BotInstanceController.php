@@ -285,9 +285,12 @@ class BotInstanceController extends Controller
             abort(403);
         }
 
+        // Clean up linked positions and trades
+        $bot->positions()->delete();
+        $bot->trades()->delete();
         $bot->delete();
 
-        return redirect()->route('bots.index')->with('success', 'Bot instance deleted successfully.');
+        return back()->with('success', "Bot #{$bot->id} ({$bot->symbol}) deleted successfully.");
     }
 
     public function importOanda()

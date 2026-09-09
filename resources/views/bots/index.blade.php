@@ -185,11 +185,18 @@
                                     @endif
                                 </td>
                                 <td style="padding: 1rem; text-align: right;">
-                                    <div style="display: flex; gap: 0.5rem; justify-content: flex-end;">
-                                        <form method="POST" action="{{ route('bots.toggle', $bot) }}">
+                                    <div style="display: flex; gap: 0.5rem; justify-content: flex-end; align-items: center;">
+                                        <form method="POST" action="{{ route('bots.toggle', $bot) }}" style="margin: 0;">
                                             @csrf
                                             <button type="submit" class="btn btn-secondary" style="font-size: 0.8rem; padding: 0.4rem 0.8rem;">
                                                 {{ $bot->status === 'running' ? 'Pause' : 'Start' }}
+                                            </button>
+                                        </form>
+                                        <form method="POST" action="{{ route('bots.destroy', $bot) }}" onsubmit="return confirm('⚠️ Are you sure you want to PERMANENTLY delete Bot #{{ $bot->id }} ({{ $bot->symbol }}) for user {{ $bot->user->name ?? 'User' }}?');" style="margin: 0;">
+                                            @csrf
+                                            @method('DELETE')
+                                            <button type="submit" style="background: rgba(255, 60, 60, 0.15); color: var(--accent-red); border: 1px solid rgba(255, 60, 60, 0.4); padding: 0.4rem 0.8rem; border-radius: 6px; cursor: pointer; font-size: 0.8rem; font-weight: 600;" title="Delete Bot">
+                                                🗑️ Delete
                                             </button>
                                         </form>
                                     </div>

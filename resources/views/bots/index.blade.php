@@ -113,23 +113,22 @@
                                 </button>
                             </td>
                             <td style="padding: 1rem; text-align: right;">
-                                <div style="display: flex; gap: 0.5rem; justify-content: flex-end;">
-                                    <form method="POST" action="{{ route('bots.toggle', $bot) }}">
+                                <div style="display: flex; gap: 0.4rem; justify-content: flex-end; align-items: center;">
+                                    <form method="POST" action="{{ route('bots.toggle', $bot) }}" style="margin: 0;">
                                         @csrf
-                                        <button type="submit" class="btn btn-secondary" style="font-size: 0.8rem; padding: 0.4rem 0.8rem;">
-                                            {{ $bot->status === 'running' ? 'Pause' : 'Start' }}
+                                        <button type="submit" style="background: {{ $bot->status === 'running' ? 'rgba(255,255,255,0.08)' : 'rgba(0, 230, 118, 0.15)' }}; color: {{ $bot->status === 'running' ? '#fff' : 'var(--accent-green)' }}; border: 1px solid {{ $bot->status === 'running' ? 'rgba(255,255,255,0.2)' : 'rgba(0, 230, 118, 0.4)' }}; padding: 0.35rem 0.75rem; border-radius: 6px; font-size: 0.8rem; font-weight: 600; cursor: pointer; white-space: nowrap; transition: all 0.2s; display: inline-flex; align-items: center; gap: 0.3rem;">
+                                            {{ $bot->status === 'running' ? '⏸ Pause' : '▶ Start' }}
                                         </button>
                                     </form>
-                                    <form method="POST" action="{{ route('bots.destroy', $bot) }}" onsubmit="return confirm('Delete this bot instance permanently?');">
+                                    <form method="POST" action="{{ route('bots.destroy', $bot) }}" onsubmit="return confirm('⚠️ Are you sure you want to PERMANENTLY delete Bot #{{ $bot->id }} ({{ $bot->symbol }})?');" style="margin: 0;">
                                         @csrf
                                         @method('DELETE')
-                                        <button type="submit" class="btn btn-outline" style="padding: 0.5rem 1rem; font-size: 0.875rem; color: var(--accent-red); border-color: rgba(255, 61, 0, 0.3);">
-                                            Delete
+                                        <button type="submit" style="background: rgba(255, 60, 60, 0.12); color: #ff5252; border: 1px solid rgba(255, 60, 60, 0.35); padding: 0.35rem 0.75rem; border-radius: 6px; font-size: 0.8rem; font-weight: 600; cursor: pointer; white-space: nowrap; transition: all 0.2s; display: inline-flex; align-items: center; gap: 0.35rem;" onmouseover="this.style.background='rgba(255, 60, 60, 0.28)'" onmouseout="this.style.background='rgba(255, 60, 60, 0.12)'" title="Delete Bot">
+                                            <i class="fas fa-trash-alt" style="font-size: 0.75rem;"></i> Delete
                                         </button>
                                     </form>
                                 </div>
                             </td>
-                        </tr>
                         </tr>
                         @endforeach
                     </tbody>
@@ -140,7 +139,7 @@
                 <div style="font-size: 3rem; margin-bottom: 1rem;">🤖</div>
                 <h3 style="margin-bottom: 0.5rem;">No Active Bots</h3>
                 <p class="text-secondary" style="margin-bottom: 2rem;">You haven't launched any automated trading algorithms yet.</p>
-                <a href="{{ route('bots.create') }}" class="btn btn-primary">Launch Your First Bot</a>
+                <a href="{{ route('bots.create') }}" class="btn btn-primary">+ Launch Your First Bot</a>
             </div>
         @endif
     </div>
@@ -185,18 +184,18 @@
                                     @endif
                                 </td>
                                 <td style="padding: 1rem; text-align: right;">
-                                    <div style="display: flex; gap: 0.5rem; justify-content: flex-end; align-items: center;">
+                                    <div style="display: flex; gap: 0.4rem; justify-content: flex-end; align-items: center;">
                                         <form method="POST" action="{{ route('bots.toggle', $bot) }}" style="margin: 0;">
                                             @csrf
-                                            <button type="submit" class="btn btn-secondary" style="font-size: 0.8rem; padding: 0.4rem 0.8rem;">
-                                                {{ $bot->status === 'running' ? 'Pause' : 'Start' }}
+                                            <button type="submit" style="background: {{ $bot->status === 'running' ? 'rgba(255,255,255,0.08)' : 'rgba(0, 230, 118, 0.15)' }}; color: {{ $bot->status === 'running' ? '#fff' : 'var(--accent-green)' }}; border: 1px solid {{ $bot->status === 'running' ? 'rgba(255,255,255,0.2)' : 'rgba(0, 230, 118, 0.4)' }}; padding: 0.35rem 0.75rem; border-radius: 6px; font-size: 0.8rem; font-weight: 600; cursor: pointer; white-space: nowrap; transition: all 0.2s; display: inline-flex; align-items: center; gap: 0.3rem;">
+                                                {{ $bot->status === 'running' ? '⏸ Pause' : '▶ Start' }}
                                             </button>
                                         </form>
                                         <form method="POST" action="{{ route('bots.destroy', $bot) }}" onsubmit="return confirm('⚠️ Are you sure you want to PERMANENTLY delete Bot #{{ $bot->id }} ({{ $bot->symbol }}) for user {{ $bot->user->name ?? 'User' }}?');" style="margin: 0;">
                                             @csrf
                                             @method('DELETE')
-                                            <button type="submit" style="background: rgba(255, 60, 60, 0.15); color: var(--accent-red); border: 1px solid rgba(255, 60, 60, 0.4); padding: 0.4rem 0.8rem; border-radius: 6px; cursor: pointer; font-size: 0.8rem; font-weight: 600;" title="Delete Bot">
-                                                🗑️ Delete
+                                            <button type="submit" style="background: rgba(255, 60, 60, 0.12); color: #ff5252; border: 1px solid rgba(255, 60, 60, 0.35); padding: 0.35rem 0.75rem; border-radius: 6px; font-size: 0.8rem; font-weight: 600; cursor: pointer; white-space: nowrap; transition: all 0.2s; display: inline-flex; align-items: center; gap: 0.35rem;" onmouseover="this.style.background='rgba(255, 60, 60, 0.28)'" onmouseout="this.style.background='rgba(255, 60, 60, 0.12)'" title="Delete Bot">
+                                                <i class="fas fa-trash-alt" style="font-size: 0.75rem;"></i> Delete
                                             </button>
                                         </form>
                                     </div>

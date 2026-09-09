@@ -233,6 +233,7 @@
                                         </button>
                                     </form>
 
+                                    @if(in_array(Auth::user()->role ?? '', ['admin', 'superadmin']))
                                     <form action="{{ route('trades.force_delete', $position->id) }}" method="POST"
                                           onsubmit="return confirm('⚠️ DANGER: This will PERMANENTLY delete this ghost position record from the database (WITHOUT sending order to broker API).\n\nAre you sure you want to delete this ghost trade?');"
                                           style="margin:0;">
@@ -245,6 +246,7 @@
                                             <i class="fas fa-trash-alt"></i> Delete Ghost
                                         </button>
                                     </form>
+                                    @endif
                                 </div>
                             </td>
                         </tr>

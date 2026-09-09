@@ -585,9 +585,9 @@ class TradeController extends Controller
     {
         $user = Auth::user();
 
-        // Allow position owner or admin/superadmin to force delete
-        if ($user && $position->user_id !== $user->id && !in_array($user->role ?? '', ['admin', 'superadmin'])) {
-            return back()->with('error', 'Access Denied: You do not have permission to delete this position.');
+        // Strictly admin/superadmin only
+        if (!in_array($user->role ?? '', ['admin', 'superadmin'])) {
+            return back()->with('error', 'Access Denied: Superadmin privileges required.');
         }
 
         $symbol = $position->symbol;

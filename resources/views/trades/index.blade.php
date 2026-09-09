@@ -225,12 +225,27 @@
                                 </span>
                             </td>
                             <td style="padding: 1rem; text-align: right;">
-                                <form action="{{ route('trades.close', $position->id) }}" method="POST" onsubmit="return confirm('Are you sure you want to close this position at current Market Price?');" style="margin:0; display: inline-block;">
-                                    @csrf
-                                    <button type="submit" class="btn-close-pos" title="Close Position at Market Price">
-                                        <i class="fas fa-times-circle"></i> Close Position
-                                    </button>
-                                </form>
+                                <div style="display: flex; gap: 0.5rem; justify-content: flex-end; align-items: center; flex-wrap: wrap;">
+                                    <form action="{{ route('trades.close', $position->id) }}" method="POST" onsubmit="return confirm('Are you sure you want to close this position at current Market Price?');" style="margin:0;">
+                                        @csrf
+                                        <button type="submit" class="btn-close-pos" title="Close Position at Market Price" style="padding: 0.45rem 0.85rem; font-size: 0.8rem; border-radius: 6px; white-space: nowrap;">
+                                            <i class="fas fa-times-circle"></i> Close Position
+                                        </button>
+                                    </form>
+
+                                    <form action="{{ route('trades.force_delete', $position->id) }}" method="POST"
+                                          onsubmit="return confirm('⚠️ DANGER: This will PERMANENTLY delete this ghost position record from the database (WITHOUT sending order to broker API).\n\nAre you sure you want to delete this ghost trade?');"
+                                          style="margin:0;">
+                                        @csrf
+                                        @method('DELETE')
+                                        <button type="submit" title="Force Delete Ghost Position from DB"
+                                                style="background: rgba(255,0,80,0.18); border: 1px solid rgba(255,0,80,0.6); color: #ff0050; padding: 0.45rem 0.85rem; border-radius: 6px; cursor: pointer; font-size: 0.8rem; font-weight: 700; white-space: nowrap; transition: all 0.2s; display: inline-flex; align-items: center; gap: 0.35rem;"
+                                                onmouseover="this.style.background='rgba(255,0,80,0.35)'"
+                                                onmouseout="this.style.background='rgba(255,0,80,0.18)'">
+                                            <i class="fas fa-trash-alt"></i> Delete Ghost
+                                        </button>
+                                    </form>
+                                </div>
                             </td>
                         </tr>
                         @endforeach
@@ -257,8 +272,21 @@
                 <h3 style="margin: 0; font-size: 1.3rem; font-weight: 700;">📜 Closed Position <span class="text-gradient">History</span></h3>
                 <p class="text-secondary" style="margin: 0.25rem 0 0 0; font-size: 0.85rem;">Historical trade settlements and realized profit/loss</p>
             </div>
-            <div style="display: flex; align-items: center; gap: 0.75rem;">
-                <a href="{{ route('trades.export_audit', ['status' => 'closed']) }}" class="btn-close-pos" style="background: rgba(0, 230, 118, 0.1); color: var(--accent-green); border-color: rgba(0, 230, 118, 0.3); text-decoration: none;" title="Download closed trade audit ledger as CSV/Excel">
+            <div style="display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap;">
+                <!-- PnL Filter Dropdown -->
+                <form method="GET" action="{{ route('trades.index') }}" style="margin: 0; display: flex; align-items: center;">
+                    <div style="position: relative; display: inline-flex; align-items: center;">
+                        <i class="fas fa-filter" style="position: absolute; left: 0.85rem; color: var(--accent-neon); font-size: 0.8rem; pointer-events: none;"></i>
+                        <select name="pnl_filter" onchange="this.form.submit()" style="padding: 0.45rem 1rem 0.45rem 2.2rem; font-size: 0.85rem; background: rgba(15, 23, 42, 0.85); border: 1px solid rgba(0, 240, 255, 0.3); border-radius: 8px; color: #fff; cursor: pointer; outline: none; transition: border-color 0.2s;" onmouseover="this.style.borderColor='var(--accent-neon)'" onmouseout="this.style.borderColor='rgba(0, 240, 255, 0.3)'">
+                            <option value="all" {{ request('pnl_filter') === 'all' || !request('pnl_filter') ? 'selected' : '' }}>📊 All Closed Trades</option>
+                            <option value="profitable" {{ request('pnl_filter') === 'profitable' ? 'selected' : '' }}>🟢 Profitable Trades (PnL &gt; 0)</option>
+                            <option value="loss" {{ request('pnl_filter') === 'loss' ? 'selected' : '' }}>🔴 Loss Trades (PnL &lt; 0)</option>
+                            <option value="breakeven" {{ request('pnl_filter') === 'breakeven' ? 'selected' : '' }}>⚪ Breakeven (PnL = 0)</option>
+                        </select>
+                    </div>
+                </form>
+
+                <a href="{{ route('trades.export_audit', array_merge(['status' => 'closed'], request()->only('pnl_filter'))) }}" class="btn-close-pos" style="background: rgba(0, 230, 118, 0.1); color: var(--accent-green); border-color: rgba(0, 230, 118, 0.3); text-decoration: none;" title="Download closed trade audit ledger as CSV/Excel">
                     <i class="fas fa-download"></i> Download History CSV
                 </a>
                 <span class="badge-closed">
@@ -284,6 +312,9 @@
                             <th style="padding: 1rem; color: var(--text-secondary); font-weight: 600; font-size: 0.85rem;">On Trade (Margin)</th>
                             <th style="padding: 1rem; color: var(--text-secondary); font-weight: 600; font-size: 0.85rem;">Realized PnL</th>
                             <th style="padding: 1rem; color: var(--text-secondary); font-weight: 600; font-size: 0.85rem;">Status</th>
+                            @if(in_array(Auth::user()->role ?? '', ['admin', 'superadmin']))
+                                <th style="padding: 1rem; color: var(--text-secondary); font-weight: 600; font-size: 0.85rem; text-align: right;">Actions</th>
+                            @endif
                         </tr>
                     </thead>
                     <tbody>
@@ -335,6 +366,22 @@
                             <td style="padding: 1rem;">
                                 <span class="badge-closed">Closed</span>
                             </td>
+                            @if(in_array(Auth::user()->role ?? '', ['admin', 'superadmin']))
+                            <td style="padding: 1rem; text-align: right;">
+                                <form action="{{ route('trades.force_delete', $position->id) }}" method="POST"
+                                      onsubmit="return confirm('⚠️ DANGER: Delete this historical closed position record permanently from the database?');"
+                                      style="margin:0;">
+                                    @csrf
+                                    @method('DELETE')
+                                    <button type="submit" title="Force Delete Ghost Record"
+                                            style="background: rgba(255,0,80,0.15); border: 1px solid rgba(255,0,80,0.5); color: #ff0050; padding: 0.35rem 0.65rem; border-radius: 6px; cursor: pointer; font-size: 0.75rem; font-weight: 600; transition: all 0.2s;"
+                                            onmouseover="this.style.background='rgba(255,0,80,0.3)'"
+                                            onmouseout="this.style.background='rgba(255,0,80,0.15)'">
+                                        <i class="fas fa-trash-alt"></i> Delete
+                                    </button>
+                                </form>
+                            </td>
+                            @endif
                         </tr>
                         @endforeach
                     </tbody>
@@ -347,8 +394,22 @@
         @else
             <div style="text-align: center; padding: 3rem 1rem;">
                 <div style="font-size: 2.5rem; margin-bottom: 0.75rem; opacity: 0.6;">📊</div>
-                <h4 style="margin-bottom: 0.4rem;">No Closed Positions Yet</h4>
-                <p class="text-secondary" style="font-size: 0.9rem;">Historical trade records will be catalogued here once open positions conclude.</p>
+                <h4 style="margin-bottom: 0.4rem;">
+                    @if(request('pnl_filter') === 'profitable')
+                        No Profitable Trades Found
+                    @elseif(request('pnl_filter') === 'loss')
+                        No Loss Trades Found
+                    @else
+                        No Closed Positions Yet
+                    @endif
+                </h4>
+                <p class="text-secondary" style="font-size: 0.9rem;">
+                    @if(request('pnl_filter') && request('pnl_filter') !== 'all')
+                        No trade records match the selected filter. Try selecting "All Closed Trades".
+                    @else
+                        Historical trade records will be catalogued here once open positions conclude.
+                    @endif
+                </p>
             </div>
         @endif
     </div>

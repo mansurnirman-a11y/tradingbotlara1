@@ -24,22 +24,22 @@ class BrokerAccountController extends Controller
     {
         $validated = $request->validate([
             'broker' => 'required|in:binance,delta_india,mt4,mt5,oanda,custom_api',
-            'server_name' => 'nullable|string|max:100|required_if:broker,mt4,mt5',
+            'server_name' => 'nullable|string|max:100',
             'account_label' => 'required|string|max:100',
-            'api_key' => 'nullable|string|required_unless:broker,oanda,custom_api',
-            'api_secret' => 'nullable|string|required_unless:broker,oanda,custom_api',
-            'bridge_url' => 'nullable|url|required_if:broker,oanda,custom_api',
+            'api_key' => 'nullable|string',
+            'api_secret' => 'nullable|string',
+            'bridge_url' => 'nullable|string',
         ]);
 
         $metaAccountId = null;
 
-        // Auto-provision Cloud MT4/MT5 account if broker is MetaTrader
-        if (in_array($validated['broker'], ['mt4', 'mt5'])) {
+        // Auto-provision Cloud MT4/MT5 account only if broker is MetaTrader and NO local/VPS bridge_url was given
+        if (in_array($validated['broker'], ['mt4', 'mt5']) && empty($validated['bridge_url'])) {
             try {
                 $provisionResult = \App\Services\MetaApiBridgeService::provisionAccount(
                     $validated['account_label'],
-                    $validated['api_key'],
-                    $validated['api_secret'],
+                    $validated['api_key'] ?? '',
+                    $validated['api_secret'] ?? '',
                     $validated['server_name'] ?? 'KasperCapitalMarkets-Server',
                     $validated['broker']
                 );

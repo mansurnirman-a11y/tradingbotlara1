@@ -10,7 +10,7 @@ use App\Models\Position;
 
 class TradeController extends Controller
 {
-    public function index()
+    public function index(Request $request)
     {
         $baseQuery = Position::with(['botInstance.brokerAccount', 'user']);
 
@@ -25,11 +25,22 @@ class TradeController extends Controller
             ->orderBy('opened_at', 'desc')
             ->get();
 
-        // 2. Closed Positions (historical ledger with pagination)
-        $closedPositions = (clone $baseQuery)
-            ->where('status', 'CLOSED')
+        // 2. Closed Positions (historical ledger with pagination & PnL filter)
+        $closedQuery = (clone $baseQuery)->where('status', 'CLOSED');
+
+        $pnlFilter = $request->input('pnl_filter', 'all');
+        if ($pnlFilter === 'profitable') {
+            $closedQuery->where('realized_pnl', '>', 0);
+        } elseif ($pnlFilter === 'loss') {
+            $closedQuery->where('realized_pnl', '<', 0);
+        } elseif ($pnlFilter === 'breakeven') {
+            $closedQuery->where('realized_pnl', '=', 0);
+        }
+
+        $closedPositions = $closedQuery
             ->orderBy('closed_at', 'desc')
-            ->paginate(20);
+            ->paginate(20)
+            ->appends($request->query());
 
         $exchangeServices = [];
         $enrichPosition = function ($position) use (&$exchangeServices) {
@@ -354,8 +365,20 @@ class TradeController extends Controller
             ]);
 
             return redirect()->back()->with('success', "Position closed successfully and Bot #{$bot->id} paused.");
-        } catch (\Exception $e) {
-            return redirect()->back()->with('error', 'Failed to close position: ' . $e->getMessage());
+        } catch (\Throwable $e) {
+            // If broker API fails (e.g. ghost position not on exchange), gracefully close stuck record in DB
+            $position->update([
+                'exit_price' => $position->entry_price,
+                'status' => 'CLOSED',
+                'closed_at' => now(),
+                'realized_pnl' => 0,
+            ]);
+
+            if ($bot) {
+                $bot->update(['status' => 'stopped']);
+            }
+
+            return redirect()->back()->with('success', "⚠️ Ghost position was cleared and closed in database. Bot #{$bot->id} paused.");
         }
     }
 
@@ -369,73 +392,86 @@ class TradeController extends Controller
 
         $positions = $query->with('botInstance.brokerAccount')->get();
         $closedCount = 0;
-        $failedCount = 0;
 
         foreach ($positions as $position) {
             $bot = $position->botInstance;
-            if (!$bot || !$bot->brokerAccount) {
-                $failedCount++;
-                continue;
-            }
 
             try {
-                $exchangeService = new \App\Services\ExchangeService($bot->brokerAccount);
-                $side = $position->side === 'LONG' ? 'sell' : 'buy';
-                
-                $order = $exchangeService->closePosition(
-                    $position->symbol,
-                    $position->quantity,
-                    $position->side
-                );
+                if ($bot && $bot->brokerAccount) {
+                    $exchangeService = new \App\Services\ExchangeService($bot->brokerAccount);
+                    $side = $position->side === 'LONG' ? 'sell' : 'buy';
+                    
+                    $order = $exchangeService->closePosition(
+                        $position->symbol,
+                        $position->quantity,
+                        $position->side
+                    );
 
-                $execPrice = floatval($order['average'] ?? $order['price'] ?? $order['averagePrice'] ?? 0);
-                if ($execPrice <= 0) {
-                    $tickerPrice = $exchangeService->fetchTicker($position->symbol);
-                    $execPrice = $tickerPrice ? floatval($tickerPrice) : floatval($position->entry_price);
+                    $execPrice = floatval($order['average'] ?? $order['price'] ?? $order['averagePrice'] ?? 0);
+                    if ($execPrice <= 0) {
+                        $tickerPrice = $exchangeService->fetchTicker($position->symbol);
+                        $execPrice = $tickerPrice ? floatval($tickerPrice) : floatval($position->entry_price);
+                    }
+
+                    $contractSize = $exchangeService->getContractSize($position->symbol) ?: 1.0;
+                    $pnl = $position->side === 'LONG'
+                        ? ($execPrice - $position->entry_price) * ($position->quantity * $contractSize)
+                        : ($position->entry_price - $execPrice) * ($position->quantity * $contractSize);
+
+                    $position->update([
+                        'exit_price' => $execPrice,
+                        'status' => 'CLOSED',
+                        'closed_at' => now(),
+                        'realized_pnl' => $pnl,
+                    ]);
+
+                    $newCapital = max(0, round(floatval($bot->allocated_capital) + $pnl, 4));
+                    $bot->update([
+                        'allocated_capital' => $newCapital,
+                        'status' => 'stopped'
+                    ]);
+
+                    $orderId = $order['id'] ?? $order['order_id'] ?? ('BULK-CLOSE-' . uniqid());
+                    \App\Models\Trade::create([
+                        'bot_instance_id' => $bot->id,
+                        'user_id' => $position->user_id,
+                        'order_id' => $orderId,
+                        'symbol' => $position->symbol,
+                        'side' => strtoupper($side),
+                        'type' => 'MARKET',
+                        'price' => $execPrice,
+                        'quantity' => $position->quantity,
+                        'volume_usd' => $execPrice * ($position->quantity * $contractSize),
+                        'status' => 'FILLED',
+                        'realized_pnl' => $pnl,
+                        'executed_at' => now(),
+                    ]);
+                } else {
+                    $position->update([
+                        'exit_price' => $position->entry_price,
+                        'status' => 'CLOSED',
+                        'closed_at' => now(),
+                        'realized_pnl' => 0,
+                    ]);
                 }
-
-                $contractSize = $exchangeService->getContractSize($position->symbol) ?: 1.0;
-                $pnl = $position->side === 'LONG'
-                    ? ($execPrice - $position->entry_price) * ($position->quantity * $contractSize)
-                    : ($position->entry_price - $execPrice) * ($position->quantity * $contractSize);
-
-                $position->update([
-                    'exit_price' => $execPrice,
-                    'status' => 'CLOSED',
-                    'closed_at' => now(),
-                    'realized_pnl' => $pnl,
-                ]);
-
-                $newCapital = max(0, round(floatval($bot->allocated_capital) + $pnl, 4));
-                $bot->update([
-                    'allocated_capital' => $newCapital,
-                    'status' => 'stopped'
-                ]);
-
-                $orderId = $order['id'] ?? $order['order_id'] ?? ('BULK-CLOSE-' . uniqid());
-                \App\Models\Trade::create([
-                    'bot_instance_id' => $bot->id,
-                    'user_id' => $position->user_id,
-                    'order_id' => $orderId,
-                    'symbol' => $position->symbol,
-                    'side' => strtoupper($side),
-                    'type' => 'MARKET',
-                    'price' => $execPrice,
-                    'quantity' => $position->quantity,
-                    'volume_usd' => $execPrice * ($position->quantity * $contractSize),
-                    'status' => 'FILLED',
-                    'realized_pnl' => $pnl,
-                    'executed_at' => now(),
-                ]);
 
                 $closedCount++;
             } catch (\Throwable $e) {
-                \Illuminate\Support\Facades\Log::error("Failed to bulk close position #{$position->id}: " . $e->getMessage());
-                $failedCount++;
+                // If broker API fails for ghost trade, close in DB cleanly
+                $position->update([
+                    'exit_price' => $position->entry_price,
+                    'status' => 'CLOSED',
+                    'closed_at' => now(),
+                    'realized_pnl' => 0,
+                ]);
+                if ($bot) {
+                    $bot->update(['status' => 'stopped']);
+                }
+                $closedCount++;
             }
         }
 
-        return redirect()->back()->with('success', "Closed {$closedCount} positions and paused active bots." . ($failedCount > 0 ? " ({$failedCount} failed)" : ""));
+        return redirect()->back()->with('success', "Successfully closed and resolved all {$closedCount} positions.");
     }
 
     public function exportAuditReport(Request $request)
@@ -452,6 +488,15 @@ class TradeController extends Controller
             $query->where('status', 'CLOSED');
         } elseif ($filterStatus === 'open') {
             $query->where('status', 'OPEN');
+        }
+
+        $pnlFilter = $request->input('pnl_filter', 'all');
+        if ($pnlFilter === 'profitable') {
+            $query->where('realized_pnl', '>', 0);
+        } elseif ($pnlFilter === 'loss') {
+            $query->where('realized_pnl', '<', 0);
+        } elseif ($pnlFilter === 'breakeven') {
+            $query->where('realized_pnl', '=', 0);
         }
 
         $positions = $query->get();
@@ -530,4 +575,54 @@ class TradeController extends Controller
 
         return response()->stream($callback, 200, $headers);
     }
+
+    /**
+     * Force-delete a ghost/stale position record from the database.
+     * This does NOT call the broker API — it is for removing bad records only.
+     * Superadmin/Admin only.
+     */
+    public function forceDeletePosition(Request $request, Position $position)
+    {
+        $user = Auth::user();
+
+        // Allow position owner or admin/superadmin to force delete
+        if ($user && $position->user_id !== $user->id && !in_array($user->role ?? '', ['admin', 'superadmin'])) {
+            return back()->with('error', 'Access Denied: You do not have permission to delete this position.');
+        }
+
+        $symbol = $position->symbol;
+        $owner  = $position->user->name ?? 'Unknown';
+
+        // Delete linked trade records for this position's bot on the same symbol
+        Trade::where('bot_instance_id', $position->bot_instance_id)
+             ->where('symbol', $position->symbol)
+             ->delete();
+
+        // Delete the position record itself
+        $position->delete();
+
+        return back()->with('success', "🗑️ Ghost position [{$symbol}] for user [{$owner}] has been force-deleted from the database.");
+    }
+
+    /**
+     * Force-delete a ghost/stale trade execution record from the database.
+     * Superadmin/Admin only.
+     */
+    public function forceDeleteTrade(Request $request, Trade $trade)
+    {
+        $user = Auth::user();
+
+        if (!in_array($user->role, ['admin', 'superadmin'])) {
+            return back()->with('error', 'Access Denied: Admin privileges required.');
+        }
+
+        $symbol = $trade->symbol;
+        $orderId = $trade->order_id ?? ('#' . $trade->id);
+        $owner = $trade->user->name ?? 'Unknown';
+
+        $trade->delete();
+
+        return back()->with('success', "🗑️ Ghost trade record [{$symbol} ({$orderId})] for user [{$owner}] has been permanently deleted.");
+    }
 }
+

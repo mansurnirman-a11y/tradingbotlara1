@@ -160,20 +160,25 @@ class BotInstanceController extends Controller
             $strategyData = null;
             $strategyClass = $bot->strategy_class ?: ($bot->strategy ? $bot->strategy->class_name : null);
             $normalized = strtolower(preg_replace('/[^a-zA-Z0-9]/', '', $strategyClass ?? ''));
-            if ($normalized === 'inbuildsupertrend' || $normalized === 'supertrend' || $normalized === 'supertrendstrategy') {
+            if (str_contains($normalized, 'sessionsweep') || str_contains($normalized, 'fvg') || str_contains($normalized, 'ict')) {
+                $strategyClass = \App\Strategies\SessionSweepFvgStrategy::class;
+            } elseif (str_contains($normalized, 'supertrend')) {
                 $strategyClass = \App\Strategies\SupertrendStrategy::class;
-            } elseif ($normalized === 'emacrossover' || $normalized === 'emacrossoverstrategy') {
+            } elseif (str_contains($normalized, 'emacrossover')) {
                 $strategyClass = \App\Strategies\EmaCrossoverStrategy::class;
-            } elseif ($normalized === 'rsireversal' || $normalized === 'rsistrategy') {
+            } elseif (str_contains($normalized, 'rsireversal') || str_contains($normalized, 'rsistrategy') || $normalized === 'rsi') {
                 $strategyClass = \App\Strategies\RsiStrategy::class;
-            } elseif ($normalized === 'macdmomentum' || $normalized === 'macdstrategy') {
+            } elseif (str_contains($normalized, 'macdmomentum') || str_contains($normalized, 'macdstrategy') || $normalized === 'macd') {
                 $strategyClass = \App\Strategies\MacdStrategy::class;
-            } elseif ($normalized === 'smatrend' || $normalized === 'smacrossoverstrategy') {
+            } elseif (str_contains($normalized, 'smatrend') || str_contains($normalized, 'smacrossoverstrategy') || $normalized === 'sma') {
                 $strategyClass = \App\Strategies\SmaCrossoverStrategy::class;
-            } elseif ($normalized === 'bollingerscalper' || $normalized === 'bollingerscalpingstrategy') {
+            } elseif (str_contains($normalized, 'bollinger')) {
                 $strategyClass = \App\Strategies\BollingerScalpingStrategy::class;
-            } elseif ($strategyClass && !class_exists($strategyClass)) {
-                $namespaced = 'App\\Strategies\\' . ltrim($strategyClass, '\\');
+            }
+
+            if (!$strategyClass || !class_exists($strategyClass)) {
+                $cleanName = class_basename($strategyClass ?? '');
+                $namespaced = 'App\\Strategies\\' . $cleanName;
                 if (class_exists($namespaced)) {
                     $strategyClass = $namespaced;
                 }
@@ -216,6 +221,7 @@ class BotInstanceController extends Controller
             'max_drawdown_pct' => 'required|numeric|min:1|max:100',
             'take_profit_pct' => 'required|numeric|min:0',
             'stop_loss_pct' => 'required|numeric|min:0',
+            'leverage' => 'nullable|numeric|min:1|max:500',
         ]);
 
         // Ensure the broker account actually belongs to this user
@@ -246,6 +252,7 @@ class BotInstanceController extends Controller
             'parameters' => [
                 'take_profit_pct' => $validated['take_profit_pct'],
                 'stop_loss_pct' => $validated['stop_loss_pct'],
+                'leverage' => floatval($validated['leverage'] ?? 25),
             ],
             'status' => 'stopped',
         ]);
@@ -255,13 +262,13 @@ class BotInstanceController extends Controller
 
     public function toggleStatus(BotInstance $bot)
     {
-        // Ensure user owns this bot
-        if ($bot->user_id !== Auth::id()) {
+        // Ensure user owns this bot or is an admin/superadmin
+        if ($bot->user_id !== Auth::id() && !Auth::user()->isAdmin()) {
             abort(403);
         }
 
         $user = Auth::user();
-        if (!$user->is_active) {
+        if (!$user->is_active && !Auth::user()->isAdmin()) {
             return back()->withErrors('Your account is pending approval by an administrator. You cannot start bots.');
         }
 
@@ -269,7 +276,7 @@ class BotInstanceController extends Controller
         $bot->save();
 
         $statusMsg = $bot->status === 'running' ? 'started' : 'stopped';
-        return back()->with('success', "Bot has been {$statusMsg}.");
+        return back()->with('success', "Bot #{$bot->id} ({$bot->symbol}) has been {$statusMsg}.");
     }
 
     public function destroy(BotInstance $bot)

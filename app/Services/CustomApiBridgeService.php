@@ -134,14 +134,14 @@ class CustomApiBridgeService
         try {
             if ($this->broker === 'oanda') {
                 $url = $this->getUrl('trade/spot_order');
-                $response = Http::timeout(5)->withHeaders($this->getHeaders())->post($url, [
+                $response = Http::timeout(8)->withHeaders($this->getHeaders())->post($url, [
                     'symbol' => $symbol,
                     'side' => strtoupper($side),
                     'quantity' => $amount,
                 ]);
             } else {
                 $url = $this->getUrl('order');
-                $response = Http::timeout(5)->post($url, [
+                $response = Http::timeout(8)->post($url, [
                     'symbol' => $symbol,
                     'side' => $side,
                     'amount' => $amount,
@@ -151,25 +151,19 @@ class CustomApiBridgeService
             }
 
             if ($response->successful() && is_array($response->json())) {
-                return $response->json();
+                $json = $response->json();
+                if (isset($json['error'])) {
+                    throw new Exception("Broker Error: " . $json['error']);
+                }
+                return $json;
             }
-        } catch (\Exception $e) {
-            Log::warning("Failed to place custom/localhost order, using mock fallback: " . $e->getMessage());
-        }
 
-        // Live/Mock Fallback
-        $livePrice = $this->fetchTicker($symbol) ?: $this->getMockPrice($symbol);
-        return [
-            'id' => 'CUSTOM-' . uniqid(),
-            'symbol' => $symbol,
-            'side' => strtoupper($side),
-            'type' => 'market',
-            'price' => $livePrice,
-            'average' => $livePrice,
-            'amount' => $amount,
-            'status' => 'closed',
-            'broker_response' => "Order executed via Custom API Bridge ({$this->broker})"
-        ];
+            $errMsg = $response->json()['error'] ?? $response->body() ?? 'HTTP ' . $response->status();
+            throw new Exception("MT5 Bridge Order Execution Failed: {$errMsg}");
+        } catch (\Exception $e) {
+            Log::error("Failed to place custom/localhost order for {$symbol}: " . $e->getMessage());
+            throw $e;
+        }
     }
 
     /**
@@ -332,13 +326,24 @@ class CustomApiBridgeService
      */
     public function fetchPositions()
     {
-        if ($this->broker === 'oanda') {
-            $url = $this->getUrl('trade/positions');
-            $response = Http::timeout(5)->withHeaders($this->getHeaders())->get($url);
-            if ($response->successful() && is_array($response->json())) {
-                return $response->json()['positions'] ?? [];
+        try {
+            if ($this->broker === 'oanda') {
+                $url = $this->getUrl('trade/positions');
+                $response = Http::timeout(5)->withHeaders($this->getHeaders())->get($url);
+                if ($response->successful() && is_array($response->json())) {
+                    return $response->json()['positions'] ?? [];
+                }
+                throw new Exception("Failed to fetch Oanda positions: API returned status " . $response->status());
+            } else {
+                // MT5 / Custom API Bridge
+                $url = $this->getUrl('positions');
+                $response = Http::timeout(5)->get($url);
+                if ($response->successful() && is_array($response->json())) {
+                    return $response->json();
+                }
             }
-            throw new Exception("Failed to fetch Oanda positions: API returned status " . $response->status());
+        } catch (\Throwable $e) {
+            Log::warning("CustomApiBridgeService fetchPositions error: " . $e->getMessage());
         }
         return [];
     }
@@ -351,21 +356,23 @@ class CustomApiBridgeService
         $positions = $this->fetchPositions();
         $formatted = [];
         foreach ($positions as $p) {
-            $entry = (float)($p['averageEntryPrice'] ?? $p['entryPrice'] ?? 0);
-            $tickerPrice = (float)($p['markPrice'] ?? $p['currentPrice'] ?? ($this->fetchTicker($p['symbol']) ?? $entry));
-            $amount = (float)($p['amount'] ?? $p['contracts'] ?? $p['size'] ?? 0);
+            $entry = (float)($p['averageEntryPrice'] ?? $p['entryPrice'] ?? $p['entry_price'] ?? 0);
+            $tickerPrice = (float)($p['markPrice'] ?? $p['currentPrice'] ?? $p['current_price'] ?? ($this->fetchTicker($p['symbol'] ?? '') ?? $entry));
+            $amount = (float)($p['amount'] ?? $p['contracts'] ?? $p['size'] ?? $p['volume'] ?? 0);
             
             // Prioritize broker calculated PnL if available
             $pnl = isset($p['unrealizedPnl']) 
                 ? (float)$p['unrealizedPnl'] 
-                : (isset($p['unrealized_pnl']) ? (float)$p['unrealized_pnl'] : ($tickerPrice - $entry) * $amount);
+                : (isset($p['unrealized_pnl']) ? (float)$p['unrealized_pnl'] : (isset($p['profit']) ? (float)$p['profit'] : ($tickerPrice - $entry) * $amount));
             
             $formatted[] = [
-                'symbol' => $p['symbol'],
+                'symbol' => $p['symbol'] ?? '',
                 'contracts' => $amount,
                 'entryPrice' => $entry,
                 'markPrice' => $tickerPrice,
                 'unrealizedPnl' => $pnl,
+                'ticket' => $p['ticket'] ?? $p['id'] ?? null,
+                'side' => $p['side'] ?? $p['type'] ?? 'LONG',
             ];
         }
         return $formatted;
@@ -415,6 +422,28 @@ class CustomApiBridgeService
                         'amount' => floatval($order['amount'] ?? $amount ?? 0),
                         'status' => 'closed',
                         'realized_pnl' => floatval($data['realizedPnl'] ?? $order['realizedPnl'] ?? 0),
+                    ];
+                }
+            } else {
+                // MT5 / Custom API Bridge close endpoint
+                $url = $this->getUrl('close');
+                $response = Http::timeout(5)->post($url, [
+                    'symbol' => $symbol,
+                    'amount' => $amount,
+                ]);
+
+                if ($response->successful() && is_array($response->json())) {
+                    $data = $response->json();
+                    return [
+                        'id' => $data['ticket'] ?? ('CLOSE-' . uniqid()),
+                        'symbol' => $symbol,
+                        'side' => $side ? (strtoupper($side) === 'LONG' ? 'SELL' : 'BUY') : 'SELL',
+                        'type' => 'market',
+                        'price' => floatval($data['close_price'] ?? $this->fetchTicker($symbol)),
+                        'average' => floatval($data['close_price'] ?? $this->fetchTicker($symbol)),
+                        'amount' => floatval($amount ?? 0),
+                        'status' => 'closed',
+                        'realized_pnl' => floatval($data['profit'] ?? 0),
                     ];
                 }
             }

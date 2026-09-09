@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
 use App\Models\User;
 use App\Models\BotInstance;
 use App\Models\Trade;
@@ -64,12 +65,18 @@ class AdminController extends Controller
 
         $recentTrades = Trade::with(['botInstance', 'user'])
             ->orderBy('executed_at', 'desc')
-            ->take(5)
+            ->take(10)
             ->get();
 
-        $users = User::withCount('botInstances')->latest()->paginate(20);
+        $openPositions = Position::with(['botInstance.brokerAccount', 'user'])
+            ->where('status', 'OPEN')
+            ->orderBy('opened_at', 'desc')
+            ->get();
 
-        return view('admin.dashboard', compact('metrics', 'users', 'chartLabels', 'chartData', 'recentTrades'));
+        $users = User::with(['brokerAccounts'])->withCount('botInstances')->latest()->paginate(20);
+        $allBots = BotInstance::with(['brokerAccount', 'user'])->latest()->get();
+
+        return view('admin.dashboard', compact('metrics', 'users', 'chartLabels', 'chartData', 'recentTrades', 'allBots', 'openPositions'));
     }
 
     public function globalKillSwitch(Request $request)
@@ -121,5 +128,47 @@ class AdminController extends Controller
         } else {
             return back()->with('error', 'Import Failed: ' . implode('<br>', $output));
         }
+    }
+
+    public function deleteUser(Request $request, User $user)
+    {
+        // Only superadmin or admin can delete users
+        if (!in_array(Auth::user()->role, ['superadmin', 'admin'])) {
+            return back()->with('error', 'Access Denied: Superadmin privileges required.');
+        }
+
+        // Cannot delete yourself
+        if ($user->id === Auth::id()) {
+            return back()->with('error', 'You cannot delete your own account.');
+        }
+
+        // Cannot delete a superadmin account
+        if ($user->role === 'superadmin') {
+            return back()->with('error', 'Cannot delete a Superadmin account.');
+        }
+
+        $userName = $user->name;
+
+        // Cascade delete all related data
+        DB::transaction(function () use ($user) {
+            // Delete positions and trades linked directly to user or user's bots
+            $botIds = BotInstance::withTrashed()->where('user_id', $user->id)->pluck('id');
+            Position::where('user_id', $user->id)->orWhereIn('bot_instance_id', $botIds)->delete();
+            Trade::where('user_id', $user->id)->orWhereIn('bot_instance_id', $botIds)->delete();
+
+            // Force delete all user bots (including soft-deleted)
+            BotInstance::withTrashed()->where('user_id', $user->id)->forceDelete();
+
+            // Force delete broker accounts (including soft-deleted)
+            \App\Models\BrokerAccount::withTrashed()->where('user_id', $user->id)->forceDelete();
+
+            // Delete audit logs
+            DB::table('audit_logs')->where('user_id', $user->id)->delete();
+
+            // Finally delete the user
+            $user->delete();
+        });
+
+        return back()->with('success', "✅ User account '{$userName}' and all associated data have been permanently deleted.");
     }
 }

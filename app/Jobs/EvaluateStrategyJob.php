@@ -46,22 +46,25 @@ class EvaluateStrategyJob implements ShouldQueue
 
             // Handle Aliases and Namespaces
             $normalized = strtolower(preg_replace('/[^a-zA-Z0-9]/', '', $strategyClass ?? ''));
-            if ($normalized === 'inbuildsupertrend' || $normalized === 'supertrend' || $normalized === 'supertrendstrategy') {
+            if (str_contains($normalized, 'sessionsweep') || str_contains($normalized, 'fvg') || str_contains($normalized, 'ict')) {
+                $strategyClass = \App\Strategies\SessionSweepFvgStrategy::class;
+            } elseif (str_contains($normalized, 'supertrend')) {
                 $strategyClass = \App\Strategies\SupertrendStrategy::class;
-            } elseif ($normalized === 'emacrossover' || $normalized === 'emacrossoverstrategy') {
+            } elseif (str_contains($normalized, 'emacrossover')) {
                 $strategyClass = \App\Strategies\EmaCrossoverStrategy::class;
-            } elseif ($normalized === 'rsireversal' || $normalized === 'rsistrategy') {
+            } elseif (str_contains($normalized, 'rsireversal') || str_contains($normalized, 'rsistrategy') || $normalized === 'rsi') {
                 $strategyClass = \App\Strategies\RsiStrategy::class;
-            } elseif ($normalized === 'macdmomentum' || $normalized === 'macdstrategy') {
+            } elseif (str_contains($normalized, 'macdmomentum') || str_contains($normalized, 'macdstrategy') || $normalized === 'macd') {
                 $strategyClass = \App\Strategies\MacdStrategy::class;
-            } elseif ($normalized === 'smatrend' || $normalized === 'smacrossoverstrategy') {
+            } elseif (str_contains($normalized, 'smatrend') || str_contains($normalized, 'smacrossoverstrategy') || $normalized === 'sma') {
                 $strategyClass = \App\Strategies\SmaCrossoverStrategy::class;
-            } elseif ($normalized === 'bollingerscalper' || $normalized === 'bollingerscalpingstrategy') {
+            } elseif (str_contains($normalized, 'bollinger')) {
                 $strategyClass = \App\Strategies\BollingerScalpingStrategy::class;
             }
 
             if (!$strategyClass || !class_exists($strategyClass)) {
-                $namespaced = 'App\\Strategies\\' . ltrim($strategyClass ?? '', '\\');
+                $cleanName = class_basename($strategyClass ?? '');
+                $namespaced = 'App\\Strategies\\' . $cleanName;
                 if (class_exists($namespaced)) {
                     $strategyClass = $namespaced;
                 } else {

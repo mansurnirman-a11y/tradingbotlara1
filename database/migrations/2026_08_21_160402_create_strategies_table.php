@@ -28,6 +28,7 @@ return new class extends Migration
             ['name' => 'MACD Momentum Crossover', 'type' => 'internal', 'class_name' => 'App\Strategies\MacdStrategy', 'description' => 'Trades based on MACD line crossing the signal line.'],
             ['name' => 'SMA Trend Crossover', 'type' => 'internal', 'class_name' => 'App\Strategies\SmaCrossoverStrategy', 'description' => 'Simple moving average crossover strategy.'],
             ['name' => 'Bollinger Scalper (High Freq)', 'type' => 'internal', 'class_name' => 'App\Strategies\BollingerScalpingStrategy', 'description' => 'Scalping inside bollinger bands.'],
+            ['name' => 'BTC/Crypto Session Sweep & FVG (ICT)', 'type' => 'internal', 'class_name' => 'App\Strategies\SessionSweepFvgStrategy', 'description' => 'Asian session liquidity sweep with MSS and Fair Value Gap confirmation (1:2.5 RR).'],
         ]);
     }
 

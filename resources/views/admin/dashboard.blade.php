@@ -135,8 +135,19 @@
                                     <strong>{{ $trade->user->name ?? 'Unknown' }}</strong> • Bot #{{ str_pad($trade->bot_instance_id, 4, '0', STR_PAD_LEFT) }} • {{ $trade->executed_at ? $trade->executed_at->diffForHumans() : $trade->created_at->diffForHumans() }}
                                 </div>
                             </div>
-                            <div style="text-align: right; font-family: monospace; font-size: 1.1rem;">
-                                ${{ number_format($trade->price, 2) }}
+                            <div style="display: flex; align-items: center; gap: 1rem;">
+                                <div style="text-align: right; font-family: monospace; font-size: 1.1rem;">
+                                    ${{ number_format($trade->price, 2) }}
+                                </div>
+                                @if(in_array(Auth::user()->role ?? '', ['admin', 'superadmin']))
+                                <form method="POST" action="{{ route('trades.record.force_delete', $trade->id) }}" onsubmit="return confirm('⚠️ Delete this trade execution record from database?');" style="margin:0;">
+                                    @csrf
+                                    @method('DELETE')
+                                    <button type="submit" title="Force Delete Ghost Trade Record" style="background: rgba(255,0,80,0.1); border: 1px solid rgba(255,0,80,0.3); color: #ff0050; padding: 0.35rem 0.6rem; border-radius: 4px; cursor: pointer; font-size: 0.75rem;" onmouseover="this.style.background='rgba(255,0,80,0.25)'" onmouseout="this.style.background='rgba(255,0,80,0.1)'">
+                                        <i class="fas fa-trash-alt"></i>
+                                    </button>
+                                </form>
+                                @endif
                             </div>
                         </div>
                     @endforeach
@@ -150,10 +161,173 @@
         </div>
     </div>
 
+    <!-- Active Open Positions & Ghost Trades Management (Superadmin Controls) -->
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; padding-bottom: 0.5rem; border-bottom: 1px solid var(--border-glass);">
+        <div style="display: flex; align-items: center; gap: 0.75rem;">
+            <h3 style="margin: 0; font-size: 1.3rem;">⚡ Live Open Positions & Ghost Trades <span class="text-gradient">(Superadmin Controls)</span></h3>
+            <span style="background: rgba(0, 240, 255, 0.12); color: var(--accent-neon); border: 1px solid rgba(0, 240, 255, 0.3); padding: 0.2rem 0.6rem; border-radius: 9999px; font-size: 0.75rem; font-weight: 600;">
+                {{ isset($openPositions) ? $openPositions->count() : 0 }} Active
+            </span>
+        </div>
+        @if(isset($openPositions) && $openPositions->count() > 0)
+        <form action="{{ route('trades.close_all') }}" method="POST" onsubmit="return confirm('⚠️ WARNING: FORCE CLOSE ALL active positions across all users?');" style="margin: 0;">
+            @csrf
+            <button type="submit" style="background: rgba(255, 60, 60, 0.15); color: var(--accent-red); border: 1px solid rgba(255, 60, 60, 0.4); padding: 0.4rem 0.9rem; border-radius: 6px; font-size: 0.8rem; font-weight: 600; cursor: pointer;">
+                🛑 Close All Live Positions
+            </button>
+        </form>
+        @endif
+    </div>
+
+    <div class="glass-panel" style="padding: 2rem; margin-bottom: 3rem;">
+        @if(isset($openPositions) && $openPositions->count() > 0)
+            <div style="overflow-x: auto;">
+                <table style="width: 100%; border-collapse: collapse; text-align: left;">
+                    <thead>
+                        <tr style="background: rgba(255, 255, 255, 0.05); border-bottom: 1px solid var(--border-glass);">
+                            <th style="padding: 1rem; color: var(--text-secondary); font-weight: 500;">Opened At</th>
+                            <th style="padding: 1rem; color: var(--text-secondary); font-weight: 500;">User</th>
+                            <th style="padding: 1rem; color: var(--text-secondary); font-weight: 500;">Bot ID</th>
+                            <th style="padding: 1rem; color: var(--text-secondary); font-weight: 500;">Broker</th>
+                            <th style="padding: 1rem; color: var(--text-secondary); font-weight: 500;">Pair & Type</th>
+                            <th style="padding: 1rem; color: var(--text-secondary); font-weight: 500;">Entry Price</th>
+                            <th style="padding: 1rem; color: var(--text-secondary); font-weight: 500;">Margin</th>
+                            <th style="padding: 1rem; color: var(--text-secondary); font-weight: 500; text-align: right;">Action</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach($openPositions as $pos)
+                        <tr style="border-bottom: 1px solid rgba(255,255,255,0.03);">
+                            <td style="padding: 1rem; color: var(--text-secondary); font-size: 0.85rem;">
+                                {{ $pos->opened_at ? $pos->opened_at->format('M d, H:i:s') : '-' }}
+                            </td>
+                            <td style="padding: 1rem;">
+                                <strong>{{ $pos->user->name ?? 'Unknown' }}</strong><br>
+                                <span style="font-size: 0.75rem; color: var(--text-secondary);">{{ $pos->user->email ?? '' }}</span>
+                            </td>
+                            <td style="padding: 1rem; font-family: monospace;">
+                                <span style="background: rgba(255,255,255,0.05); padding: 0.2rem 0.5rem; border-radius: 4px;">#{{ str_pad($pos->bot_instance_id, 4, '0', STR_PAD_LEFT) }}</span>
+                            </td>
+                            <td style="padding: 1rem;">
+                                <span style="color: var(--accent-neon); font-size: 0.85rem; font-weight: 600; text-transform: uppercase;">
+                                    {{ $pos->botInstance->brokerAccount->broker ?? 'Broker' }}
+                                </span>
+                            </td>
+                            <td style="padding: 1rem;">
+                                <strong>{{ $pos->symbol }}</strong><br>
+                                @if($pos->side === 'LONG')
+                                    <span style="color: var(--accent-green); font-size: 0.75rem; font-weight: 700;">BUY / LONG</span>
+                                @else
+                                    <span style="color: var(--accent-red); font-size: 0.75rem; font-weight: 700;">SELL / SHORT</span>
+                                @endif
+                            </td>
+                            <td style="padding: 1rem; font-family: monospace; font-size: 0.95rem;">
+                                ${{ number_format($pos->entry_price, 2) }}
+                            </td>
+                            <td style="padding: 1rem;">
+                                <strong>${{ number_format($pos->margin_used ?? 0, 2) }}</strong>
+                            </td>
+                            <td style="padding: 1rem; text-align: right;">
+                                <div style="display: flex; gap: 0.5rem; justify-content: flex-end; align-items: center; flex-wrap: wrap;">
+                                    <form action="{{ route('trades.close', $pos->id) }}" method="POST" onsubmit="return confirm('Close position on exchange at market price?');" style="margin: 0;">
+                                        @csrf
+                                        <button type="submit" style="background: rgba(255, 60, 60, 0.1); color: var(--accent-red); border: 1px solid rgba(255, 60, 60, 0.3); padding: 0.4rem 0.8rem; border-radius: 6px; font-size: 0.8rem; font-weight: 600; cursor: pointer;">
+                                            Close
+                                        </button>
+                                    </form>
+
+                                    <form action="{{ route('trades.force_delete', $pos->id) }}" method="POST" onsubmit="return confirm('🚨 DANGER: Force delete this ghost position record from database?\n\nThis will remove the stuck/ghost trade immediately without calling the broker API.');" style="margin: 0;">
+                                        @csrf
+                                        @method('DELETE')
+                                        <button type="submit" title="Force Delete Ghost Position" style="background: rgba(255, 0, 80, 0.2); border: 1px solid rgba(255, 0, 80, 0.6); color: #ff0050; padding: 0.4rem 0.8rem; border-radius: 6px; font-size: 0.8rem; font-weight: 700; cursor: pointer; display: inline-flex; align-items: center; gap: 0.3rem;" onmouseover="this.style.background='rgba(255,0,80,0.35)'" onmouseout="this.style.background='rgba(255,0,80,0.2)'">
+                                            <i class="fas fa-trash-alt"></i> Delete Ghost
+                                        </button>
+                                    </form>
+                                </div>
+                            </td>
+                        </tr>
+                        @endforeach
+                    </tbody>
+                </table>
+            </div>
+        @else
+            <div style="text-align: center; padding: 2rem; color: var(--text-secondary);">
+                <div style="font-size: 2rem; margin-bottom: 0.5rem;">✨</div>
+                <p>No open positions or ghost trades currently active.</p>
+            </div>
+        @endif
+    </div>
+
+    <!-- Global Bot Instances Management -->
+    <h3 style="margin-bottom: 1rem; padding-bottom: 0.5rem; border-bottom: 1px solid var(--border-glass);">All Trading Bots (Global Controls)</h3>
+    <div class="glass-panel" style="padding: 2rem; margin-bottom: 3rem;">
+        @if(isset($allBots) && $allBots->count() > 0)
+            <div style="overflow-x: auto;">
+                <table style="width: 100%; border-collapse: collapse; text-align: left;">
+                    <thead>
+                        <tr style="background: rgba(255, 255, 255, 0.05); border-bottom: 1px solid var(--border-glass);">
+                            <th style="padding: 1rem; color: var(--text-secondary); font-weight: 500;">User</th>
+                            <th style="padding: 1rem; color: var(--text-secondary); font-weight: 500;">Bot ID</th>
+                            <th style="padding: 1rem; color: var(--text-secondary); font-weight: 500;">Broker</th>
+                            <th style="padding: 1rem; color: var(--text-secondary); font-weight: 500;">Pair & Strategy</th>
+                            <th style="padding: 1rem; color: var(--text-secondary); font-weight: 500;">Capital / Leverage</th>
+                            <th style="padding: 1rem; color: var(--text-secondary); font-weight: 500;">Status</th>
+                            <th style="padding: 1rem; color: var(--text-secondary); font-weight: 500; text-align: right;">Controls</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach($allBots as $bot)
+                        <tr style="border-bottom: 1px solid rgba(255,255,255,0.03);">
+                            <td style="padding: 1rem;">
+                                <strong>{{ $bot->user->name ?? 'Unknown' }}</strong><br>
+                                <span style="font-size: 0.8rem; color: var(--text-secondary);">{{ $bot->user->email ?? '' }}</span>
+                            </td>
+                            <td style="padding: 1rem; font-family: monospace;">#{{ str_pad($bot->id, 4, '0', STR_PAD_LEFT) }}</td>
+                            <td style="padding: 1rem;">
+                                {{ $bot->brokerAccount->account_label ?? 'N/A' }}<br>
+                                <span style="font-size: 0.75rem; color: var(--text-secondary); text-transform: uppercase;">{{ $bot->brokerAccount->broker ?? '' }}</span>
+                            </td>
+                            <td style="padding: 1rem;">
+                                <strong>{{ $bot->symbol }}</strong> ({{ $bot->timeframe }})<br>
+                                <span style="font-size: 0.8rem; color: var(--text-secondary);">{{ class_basename($bot->strategy_class) }}</span>
+                            </td>
+                            <td style="padding: 1rem;">
+                                ${{ number_format($bot->allocated_capital, 2) }}<br>
+                                <span style="font-size: 0.8rem; color: var(--accent-neon);">{{ $bot->parameters['leverage'] ?? 25 }}x</span>
+                            </td>
+                            <td style="padding: 1rem;">
+                                @if($bot->status === 'running')
+                                    <span style="color: var(--accent-neon); background: rgba(0, 240, 255, 0.1); padding: 0.25rem 0.75rem; border-radius: 1rem; font-size: 0.875rem; font-weight: 600;">● Running</span>
+                                @else
+                                    <span style="color: var(--text-secondary); background: rgba(255, 255, 255, 0.05); padding: 0.25rem 0.75rem; border-radius: 1rem; font-size: 0.875rem;">⏸ Stopped</span>
+                                @endif
+                            </td>
+                            <td style="padding: 1rem; text-align: right;">
+                                <div style="display: flex; gap: 0.5rem; justify-content: flex-end; align-items: center;">
+                                    <form method="POST" action="{{ route('bots.toggle', $bot) }}" style="margin: 0;">
+                                        @csrf
+                                        <button type="submit" class="btn {{ $bot->status === 'running' ? 'btn-secondary' : 'btn-primary' }}" style="font-size: 0.8rem; padding: 0.45rem 1rem; border-radius: 6px; font-weight: 600;">
+                                            {{ $bot->status === 'running' ? '⏸ Pause' : '▶ Start' }}
+                                        </button>
+                                    </form>
+                                </div>
+                            </td>
+                        </tr>
+                        @endforeach
+                    </tbody>
+                </table>
+            </div>
+        @else
+            <div style="text-align: center; padding: 2rem; color: var(--text-secondary);">
+                <p>No trading bots created on the platform yet.</p>
+            </div>
+        @endif
+    </div>
+
     <!-- User Directory -->
     <h3 style="margin-bottom: 1rem; padding-bottom: 0.5rem; border-bottom: 1px solid var(--border-glass);">Platform Users</h3>
     <div class="glass-panel" style="padding: 2rem;">
-        <h2 style="font-size: 1.5rem; margin-top: 2rem; margin-bottom: 1rem;">User Management</h2>
+        <h2 style="font-size: 1.5rem; margin-bottom: 1rem;">User Management</h2>
         
         @if(session('success'))
             <div class="alert" style="background: rgba(0, 230, 118, 0.1); color: var(--accent-green); border: 1px solid rgba(0, 230, 118, 0.2); margin-bottom: 1rem;">
@@ -167,6 +341,7 @@
                     <tr style="background: rgba(255, 255, 255, 0.05); border-bottom: 1px solid var(--border-glass);">
                         <th style="padding: 1rem;">Name</th>
                         <th style="padding: 1rem;">Email</th>
+                        <th style="padding: 1rem;">Connected Brokers / Live Balance</th>
                         <th style="padding: 1rem;">Total Bots</th>
                         <th style="padding: 1rem;">Actions</th>
                     </tr>
@@ -175,24 +350,67 @@
                     @foreach($users as $u)
                         <tr style="border-bottom: 1px solid var(--border-glass);">
                             <td style="padding: 1rem;">
-                                {{ $u->name }}
+                                <strong>{{ $u->name }}</strong>
                                 @if($u->role === 'superadmin')
                                     <span style="color: var(--accent-red); font-weight: bold; font-size: 0.8rem; margin-left: 0.5rem;">[SUPERADMIN]</span>
                                 @endif
                             </td>
                             <td style="padding: 1rem;">{{ $u->email }}</td>
-                            <td style="padding: 1rem;">{{ $u->bot_instances_count }}</td>
+                            <td style="padding: 1rem; min-width: 260px;">
+                                @if($u->brokerAccounts && $u->brokerAccounts->count() > 0)
+                                    <div style="display: flex; flex-direction: column; gap: 0.4rem;">
+                                        @foreach($u->brokerAccounts as $acc)
+                                            <div style="display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; background: rgba(255,255,255,0.03); border: 1px solid var(--border-glass); padding: 0.35rem 0.6rem; border-radius: 6px; font-size: 0.85rem;">
+                                                <div>
+                                                    <span style="color: var(--accent-neon); font-weight: 600; text-transform: uppercase; font-size: 0.75rem;">{{ str_replace('_', ' ', $acc->broker) }}</span>
+                                                    <span style="color: var(--text-secondary); font-size: 0.75rem;">({{ $acc->account_label }})</span>
+                                                </div>
+                                                <div>
+                                                    @if($acc->is_active)
+                                                        <span class="user-live-balance-cell" data-account-id="{{ $acc->id }}">
+                                                            <span style="font-size: 0.75rem; color: var(--text-secondary);"><i class="fas fa-spinner fa-spin"></i> Fetching...</span>
+                                                        </span>
+                                                    @else
+                                                        <span style="color: var(--accent-red); font-size: 0.75rem;">Inactive</span>
+                                                    @endif
+                                                </div>
+                                            </div>
+                                        @endforeach
+                                    </div>
+                                @else
+                                    <span style="color: var(--text-secondary); font-size: 0.85rem; font-style: italic;">No broker connected</span>
+                                @endif
+                            </td>
+                            <td style="padding: 1rem;">
+                                <span style="background: rgba(255,255,255,0.05); padding: 0.25rem 0.6rem; border-radius: 4px; font-weight: 600;">{{ $u->bot_instances_count }}</span>
+                            </td>
                             <td style="padding: 1rem;">
                                 @if($u->id !== Auth::id())
-                                <form method="POST" action="{{ route('admin.users.update', $u->id) }}" style="display: flex; gap: 0.5rem; align-items: center;">
-                                    @csrf
-                                    <select name="is_active" class="form-input" style="width: auto; padding: 0.5rem;">
-                                        <option value="1" {{ $u->is_active ? 'selected' : '' }}>Approved</option>
-                                        <option value="0" {{ !$u->is_active ? 'selected' : '' }}>Suspended</option>
-                                    </select>
-                                    <input type="number" name="max_bots" value="{{ $u->max_bots }}" class="form-input" style="width: 70px; padding: 0.5rem;" title="Max Bots Limit">
-                                    <button type="submit" class="btn btn-outline" style="padding: 0.5rem 1rem;">Save</button>
-                                </form>
+                                <div style="display: flex; flex-direction: column; gap: 0.6rem;">
+                                    <form method="POST" action="{{ route('admin.users.update', $u->id) }}" style="display: flex; gap: 0.5rem; align-items: center;">
+                                        @csrf
+                                        <select name="is_active" class="form-input" style="width: auto; padding: 0.5rem;">
+                                            <option value="1" {{ $u->is_active ? 'selected' : '' }}>Approved</option>
+                                            <option value="0" {{ !$u->is_active ? 'selected' : '' }}>Suspended</option>
+                                        </select>
+                                        <input type="number" name="max_bots" value="{{ $u->max_bots }}" class="form-input" style="width: 70px; padding: 0.5rem;" title="Max Bots Limit">
+                                        <button type="submit" class="btn btn-outline" style="padding: 0.5rem 1rem;">Save</button>
+                                    </form>
+                                    @if(in_array(Auth::user()->role ?? '', ['superadmin', 'admin']) && $u->role !== 'superadmin')
+                                    <form method="POST" action="{{ route('admin.users.delete', $u->id) }}"
+                                          onsubmit="return confirm('🚨 WARNING: Delete user \'{{ addslashes($u->name) }}\'?\n\nThis will PERMANENTLY delete:\n• All their bots\n• All positions & trade history\n• All broker accounts\n\nThis action CANNOT be undone. Are you absolutely sure?');"
+                                          style="margin: 0;">
+                                        @csrf
+                                        @method('DELETE')
+                                        <button type="submit"
+                                                style="background: rgba(255,0,80,0.1); border: 1px solid rgba(255,0,80,0.4); color: #ff0050; padding: 0.4rem 1rem; border-radius: 6px; cursor: pointer; font-size: 0.8rem; font-weight: 600; width: 100%; transition: all 0.2s;"
+                                                onmouseover="this.style.background='rgba(255,0,80,0.25)'"
+                                                onmouseout="this.style.background='rgba(255,0,80,0.1)'">
+                                            <i class="fas fa-user-times" style="margin-right: 0.3rem;"></i> Delete Account
+                                        </button>
+                                    </form>
+                                    @endif
+                                </div>
                                 @else
                                     <span class="text-secondary">Cannot edit yourself</span>
                                 @endif
@@ -256,6 +474,37 @@ document.addEventListener('DOMContentLoaded', function() {
     // Fetch immediately, then every 10 seconds
     fetchDashboardUpnl();
     setInterval(fetchDashboardUpnl, 10000);
+
+    // Fetch User Live Balances for Superadmin Platform Users table
+    function fetchUserLiveBalances() {
+        const balanceCells = document.querySelectorAll('.user-live-balance-cell');
+        if (balanceCells.length === 0) return;
+
+        const accountIds = Array.from(balanceCells).map(cell => cell.dataset.accountId);
+        if (accountIds.length === 0) return;
+
+        fetch('{{ route('brokers.live-balances') }}?account_ids[]=' + accountIds.join('&account_ids[]='))
+        .then(res => res.json())
+        .then(data => {
+            if (data.balances) {
+                balanceCells.forEach(cell => {
+                    const accId = cell.dataset.accountId;
+                    if (data.balances[accId] !== undefined) {
+                        const bal = data.balances[accId];
+                        if (bal === 'Error/API limits' || bal === 'API Error/Blocked' || bal === 'Error') {
+                            cell.innerHTML = `<span style="color: var(--accent-red); font-size: 0.75rem;" title="${bal}">Error</span>`;
+                        } else {
+                            cell.innerHTML = `<strong style="color: var(--accent-green); font-size: 0.85rem;">$${bal}</strong> <span style="font-size: 0.7rem; color: var(--text-secondary);">USDT</span>`;
+                        }
+                    }
+                });
+            }
+        })
+        .catch(err => console.error("Error fetching user live balances:", err));
+    }
+
+    fetchUserLiveBalances();
+    setInterval(fetchUserLiveBalances, 30000);
 });
 </script>
 

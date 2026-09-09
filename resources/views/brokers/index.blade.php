@@ -257,25 +257,27 @@
         function toggleBrokerFields() {
             const val = brokerSelect.value;
 
-            // MT4 / MT5 Cloud Mode
+            // MT4 / MT5 Mode
             if (val === 'mt4' || val === 'mt5') {
                 serverNameGroup.style.display = 'block';
-                serverNameInput.setAttribute('required', 'required');
+                serverNameInput.removeAttribute('required');
 
-                bridgeUrlGroup.style.display = 'none';
+                bridgeUrlGroup.style.display = 'block';
                 bridgeUrlInput.removeAttribute('required');
-                bridgeUrlInput.value = '';
+                if (!bridgeUrlInput.value) {
+                    bridgeUrlInput.placeholder = 'e.g. http://127.0.0.1:5000 (0-Cost Python Bridge)';
+                }
 
-                apiKeyLabel.innerHTML = (val === 'mt5' ? 'MT5' : 'MT4') + ' Login / Account Number <span class="api-key-required" style="color: var(--accent-red);">*</span>';
+                apiKeyLabel.innerHTML = (val === 'mt5' ? 'MT5' : 'MT4') + ' Account Login (Optional if running local bridge)';
                 apiKeyInput.placeholder = 'e.g. 12345678';
-                apiKeyInput.setAttribute('required', 'required');
+                apiKeyInput.removeAttribute('required');
 
-                apiSecretLabel.innerHTML = (val === 'mt5' ? 'MT5' : 'MT4') + ' Trading Password <span class="api-secret-required" style="color: var(--accent-red);">*</span>';
-                apiSecretInput.placeholder = 'Enter trading password';
-                apiSecretInput.setAttribute('required', 'required');
+                apiSecretLabel.innerHTML = (val === 'mt5' ? 'MT5' : 'MT4') + ' Password / Note (Optional)';
+                apiSecretInput.placeholder = 'Optional note or password';
+                apiSecretInput.removeAttribute('required');
 
-                if (apiKeyRequiredStar) apiKeyRequiredStar.style.display = 'inline';
-                if (apiSecretRequiredStar) apiSecretRequiredStar.style.display = 'inline';
+                if (apiKeyRequiredStar) apiKeyRequiredStar.style.display = 'none';
+                if (apiSecretRequiredStar) apiSecretRequiredStar.style.display = 'none';
             } 
             // Custom API / Oanda Mode
             else if (['oanda', 'custom_api'].includes(val)) {
@@ -284,6 +286,7 @@
 
                 bridgeUrlGroup.style.display = 'block';
                 bridgeUrlInput.setAttribute('required', 'required');
+                bridgeUrlInput.placeholder = 'e.g. http://127.0.0.1:5000 or https://api.custombroker.com';
 
                 apiKeyLabel.innerHTML = 'API Key (Optional)';
                 apiKeyInput.placeholder = 'Paste your API Key (if required)';

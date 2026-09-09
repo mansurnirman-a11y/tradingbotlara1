@@ -51,8 +51,39 @@
 
             <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; margin-bottom: 1.5rem;">
                 <div class="form-group" style="margin-bottom: 0;">
-                    <label class="form-label">Trading Pair (Symbol)</label>
-                    <input type="text" name="symbol" class="form-input" required placeholder="e.g., BTC/USDT" value="BTC/USDT">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.4rem;">
+                        <label class="form-label" style="margin-bottom: 0;">Trading Pair (Symbol)</label>
+                        <span id="symbol_type_badge" style="font-size: 0.72rem; color: var(--accent-green); background: rgba(0,230,118,0.1); padding: 0.15rem 0.4rem; border-radius: 4px;">Crypto</span>
+                    </div>
+                    <select id="symbol_select" class="form-input" style="background: rgba(0,0,0,0.5);">
+                        <optgroup label="🔥 Popular Crypto (Binance / Delta)">
+                            <option value="BTC/USDT" selected>BTC/USDT (Bitcoin)</option>
+                            <option value="ETH/USDT">ETH/USDT (Ethereum)</option>
+                            <option value="SOL/USDT">SOL/USDT (Solana)</option>
+                            <option value="BNB/USDT">BNB/USDT (Binance Coin)</option>
+                            <option value="XRP/USDT">XRP/USDT (Ripple)</option>
+                            <option value="DOGE/USDT">DOGE/USDT (Dogecoin)</option>
+                            <option value="ADA/USDT">ADA/USDT (Cardano)</option>
+                            <option value="AVAX/USDT">AVAX/USDT (Avalanche)</option>
+                        </optgroup>
+                        <optgroup label="🌍 Forex & Commodities (MT5 / Oanda)">
+                            <option value="XAUUSD">XAUUSD (Gold / US Dollar)</option>
+                            <option value="EURUSD">EURUSD (Euro / US Dollar)</option>
+                            <option value="GBPUSD">GBPUSD (British Pound / US Dollar)</option>
+                            <option value="USDJPY">USDJPY (US Dollar / Japanese Yen)</option>
+                            <option value="AUDUSD">AUDUSD (Australian Dollar / USD)</option>
+                            <option value="USDCAD">USDCAD (US Dollar / Canadian Dollar)</option>
+                            <option value="USDCHF">USDCHF (US Dollar / Swiss Franc)</option>
+                            <option value="NZDUSD">NZDUSD (New Zealand Dollar / USD)</option>
+                            <option value="XAGUSD">XAGUSD (Silver / US Dollar)</option>
+                            <option value="USOIL">USOIL (Crude Oil / WTI)</option>
+                        </optgroup>
+                        <optgroup label="✏️ Custom / Other Symbol">
+                            <option value="__CUSTOM__">➕ Enter Custom Symbol Manually...</option>
+                        </optgroup>
+                    </select>
+
+                    <input type="text" name="symbol" id="symbol_input" class="form-input" required placeholder="Type custom pair, e.g. LTCUSDT or GBPJPY" value="BTC/USDT" style="display: none; margin-top: 0.5rem;">
                 </div>
 
                 <div class="form-group" style="margin-bottom: 0;">
@@ -84,11 +115,36 @@
                 </div>
             </div>
 
-            <!-- Live 25x Futures Position & Lot Size Preview Card -->
+            <!-- Leverage Adjustment Setting -->
+            <div class="form-group" style="margin-bottom: 1.5rem;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+                    <label class="form-label" style="margin-bottom: 0; font-weight: 600;">Trading Leverage (Multiplier)</label>
+                    <span id="leverage_display_badge" style="background: rgba(0, 230, 118, 0.15); color: var(--accent-green); font-size: 0.8rem; font-weight: 700; padding: 0.2rem 0.6rem; border-radius: 6px; border: 1px solid rgba(0, 230, 118, 0.3);">25x Selected</span>
+                </div>
+                
+                <div style="display: flex; gap: 0.5rem; margin-bottom: 0.75rem; flex-wrap: wrap;">
+                    <button type="button" class="btn-lev" data-lev="1" style="background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); color: #fff; padding: 0.4rem 0.8rem; border-radius: 6px; cursor: pointer; font-size: 0.85rem; transition: all 0.2s;">1x (Spot)</button>
+                    <button type="button" class="btn-lev" data-lev="5" style="background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); color: #fff; padding: 0.4rem 0.8rem; border-radius: 6px; cursor: pointer; font-size: 0.85rem; transition: all 0.2s;">5x</button>
+                    <button type="button" class="btn-lev" data-lev="10" style="background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); color: #fff; padding: 0.4rem 0.8rem; border-radius: 6px; cursor: pointer; font-size: 0.85rem; transition: all 0.2s;">10x</button>
+                    <button type="button" class="btn-lev active" data-lev="25" style="background: var(--accent-green); border: 1px solid var(--accent-green); color: #000; font-weight: 700; padding: 0.4rem 0.8rem; border-radius: 6px; cursor: pointer; font-size: 0.85rem; transition: all 0.2s;">25x (Default)</button>
+                    <button type="button" class="btn-lev" data-lev="50" style="background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); color: #fff; padding: 0.4rem 0.8rem; border-radius: 6px; cursor: pointer; font-size: 0.85rem; transition: all 0.2s;">50x</button>
+                    <button type="button" class="btn-lev" data-lev="100" style="background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); color: #fff; padding: 0.4rem 0.8rem; border-radius: 6px; cursor: pointer; font-size: 0.85rem; transition: all 0.2s;">100x</button>
+                </div>
+                
+                <div style="display: flex; align-items: center; gap: 0.75rem;">
+                    <div style="position: relative; max-width: 140px;">
+                        <input type="number" step="1" min="1" max="500" name="leverage" id="leverage_input" class="form-input" required placeholder="e.g., 25" value="25" style="padding-right: 2rem;">
+                        <span style="position: absolute; right: 0.75rem; top: 50%; transform: translateY(-50%); color: var(--text-secondary); font-size: 0.85rem; font-weight: 600;">x</span>
+                    </div>
+                    <small class="text-secondary" style="font-size: 0.75rem;">Choose a preset above or type custom leverage (1x to 500x).</small>
+                </div>
+            </div>
+
+            <!-- Dynamic Futures Position & Lot Size Preview Card -->
             <div id="position_preview_card" style="background: rgba(0, 230, 118, 0.04); border: 1px solid rgba(0, 230, 118, 0.2); border-radius: 12px; padding: 1.25rem 1.5rem; margin-bottom: 2rem; position: relative; overflow: hidden;">
                 <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 1rem; border-bottom: 1px solid rgba(255,255,255,0.08); padding-bottom: 0.75rem;">
                     <div style="display: flex; align-items: center; gap: 0.5rem;">
-                        <span style="background: var(--accent-green); color: #000; font-size: 0.7rem; font-weight: 700; padding: 0.2rem 0.5rem; border-radius: 4px;">25x AUTO-MULTIPLY</span>
+                        <span id="preview_top_badge" style="background: var(--accent-green); color: #000; font-size: 0.7rem; font-weight: 700; padding: 0.2rem 0.5rem; border-radius: 4px;">25x LEVERAGE</span>
                         <span style="font-size: 0.9rem; font-weight: 600; color: #fff;">Futures Position & Lot Estimation</span>
                     </div>
                     <span style="font-size: 0.75rem; color: var(--text-secondary);">Calculated Live</span>
@@ -101,7 +157,7 @@
                     </div>
                     <div>
                         <div style="font-size: 0.75rem; color: var(--text-secondary); margin-bottom: 0.2rem;">Futures Multiplier</div>
-                        <div style="font-size: 1.1rem; font-weight: 700; color: var(--accent-green);">25x</div>
+                        <div id="preview_multiplier_val" style="font-size: 1.1rem; font-weight: 700; color: var(--accent-green);">25x</div>
                     </div>
                     <div>
                         <div style="font-size: 0.75rem; color: var(--text-secondary); margin-bottom: 0.2rem;">Total Trade Buying Power</div>
@@ -113,7 +169,7 @@
                     </div>
                 </div>
                 <div style="margin-top: 0.75rem; font-size: 0.72rem; color: rgba(255,255,255,0.6); display: flex; align-items: center; gap: 0.4rem;">
-                    <span>ℹ️</span> <span>Bot will automatically deploy <strong>25x leveraged lot size</strong> on your connected broker.</span>
+                    <span>ℹ️</span> <span>Bot will automatically deploy <strong id="preview_lev_desc">25x leveraged lot size</strong> on your connected broker.</span>
                 </div>
             </div>
 
@@ -163,6 +219,17 @@ document.addEventListener('DOMContentLoaded', function() {
             slInput.style.opacity = '0.5';
             tpInput.style.cursor = 'not-allowed';
             slInput.style.cursor = 'not-allowed';
+        } else if (className === 'App\\Strategies\\SessionSweepFvgStrategy') {
+            tpInput.value = '2.5';
+            slInput.value = '1.0';
+            tpInput.readOnly = false;
+            slInput.readOnly = false;
+            tpInput.style.opacity = '1';
+            slInput.style.opacity = '1';
+            tpInput.style.cursor = 'auto';
+            slInput.style.cursor = 'auto';
+            const tfSelect = document.querySelector('select[name="timeframe"]');
+            if (tfSelect) tfSelect.value = '15m';
         } else {
             if (tpInput.value === '0.0' || tpInput.value === '0') {
                 tpInput.value = originalTp;
@@ -186,17 +253,114 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
 
-    // Live 25x Futures Calculation Logic
+    // Dynamic Leverage & Buying Power Calculation Logic
     const capitalInput = document.getElementById('allocated_capital_input');
-    const symbolInput = document.querySelector('input[name="symbol"]');
+    const leverageInput = document.getElementById('leverage_input');
+    const leverageButtons = document.querySelectorAll('.btn-lev');
+    const leverageBadge = document.getElementById('leverage_display_badge');
+    const topLevBadge = document.getElementById('preview_top_badge');
+    const previewMultVal = document.getElementById('preview_multiplier_val');
+    const previewLevDesc = document.getElementById('preview_lev_desc');
+    
+    // Symbol Select & Custom Input Logic
+    const symbolSelect = document.getElementById('symbol_select');
+    const symbolInput = document.getElementById('symbol_input');
+    const symbolTypeBadge = document.getElementById('symbol_type_badge');
+    const brokerSelect = document.querySelector('select[name="broker_account_id"]');
+
     const previewMargin = document.getElementById('preview_margin');
     const previewBuyingPower = document.getElementById('preview_buying_power');
     const previewLotSize = document.getElementById('preview_lot_size');
 
+    function updateSymbolState() {
+        const val = symbolSelect.value;
+        if (val === '__CUSTOM__') {
+            symbolInput.style.display = 'block';
+            symbolInput.focus();
+            if (symbolTypeBadge) {
+                symbolTypeBadge.textContent = 'Custom';
+                symbolTypeBadge.style.color = '#64b5f6';
+                symbolTypeBadge.style.background = 'rgba(100, 181, 246, 0.1)';
+            }
+        } else {
+            symbolInput.style.display = 'none';
+            symbolInput.value = val;
+            
+            const isForex = val.includes('EUR') || val.includes('GBP') || val.includes('AUD') || val.includes('JPY') || val.includes('CAD') || val.includes('CHF') || val.includes('NZD') || val.includes('XAU') || val.includes('XAG') || val.includes('OIL') || (val.includes('USD') && !val.includes('BTC') && !val.includes('ETH') && !val.includes('SOL') && !val.includes('USDT'));
+            if (symbolTypeBadge) {
+                symbolTypeBadge.textContent = isForex ? 'Forex / Gold' : 'Crypto';
+                symbolTypeBadge.style.color = isForex ? '#ffab00' : 'var(--accent-green)';
+                symbolTypeBadge.style.background = isForex ? 'rgba(255, 171, 0, 0.1)' : 'rgba(0, 230, 118, 0.1)';
+            }
+        }
+        updateLivePreview();
+    }
+
+    if (symbolSelect) {
+        symbolSelect.addEventListener('change', updateSymbolState);
+    }
+
+    if (symbolInput) {
+        symbolInput.addEventListener('input', updateLivePreview);
+    }
+
+    // Auto-select smart pair when broker account changes
+    if (brokerSelect) {
+        brokerSelect.addEventListener('change', function() {
+            const optText = this.options[this.selectedIndex] ? this.options[this.selectedIndex].text.toUpperCase() : '';
+            if (optText.includes('MT5') || optText.includes('MT4') || optText.includes('OANDA')) {
+                if (symbolSelect.value === 'BTC/USDT') {
+                    symbolSelect.value = 'XAUUSD';
+                    updateSymbolState();
+                }
+            } else if (optText.includes('BINANCE') || optText.includes('DELTA')) {
+                if (symbolSelect.value === 'XAUUSD' || symbolSelect.value === 'EURUSD') {
+                    symbolSelect.value = 'BTC/USDT';
+                    updateSymbolState();
+                }
+            }
+        });
+    }
+
+    // Preset button click handler
+    leverageButtons.forEach(btn => {
+        btn.addEventListener('click', function() {
+            const lev = parseFloat(this.getAttribute('data-lev'));
+            leverageInput.value = lev;
+            updateLeverageButtons(lev);
+            updateLivePreview();
+        });
+    });
+
+    function updateLeverageButtons(currentLev) {
+        leverageButtons.forEach(btn => {
+            const btnLev = parseFloat(btn.getAttribute('data-lev'));
+            if (btnLev === currentLev) {
+                btn.style.background = 'var(--accent-green)';
+                btn.style.color = '#000';
+                btn.style.fontWeight = '700';
+                btn.style.borderColor = 'var(--accent-green)';
+            } else {
+                btn.style.background = 'rgba(255,255,255,0.05)';
+                btn.style.color = '#fff';
+                btn.style.fontWeight = 'normal';
+                btn.style.borderColor = 'rgba(255,255,255,0.1)';
+            }
+        });
+    }
+
     function updateLivePreview() {
         const capital = parseFloat(capitalInput.value) || 0;
-        const buyingPower = capital * 25.0;
+        let leverage = parseFloat(leverageInput.value) || 1;
+        if (leverage < 1) leverage = 1;
+
+        const buyingPower = capital * leverage;
         const rawSym = (symbolInput ? symbolInput.value : 'BTC/USDT').toUpperCase();
+
+        if (leverageBadge) leverageBadge.textContent = leverage + 'x Selected';
+        if (topLevBadge) topLevBadge.textContent = leverage + 'x LEVERAGE';
+        if (previewMultVal) previewMultVal.textContent = leverage + 'x';
+        if (previewLevDesc) previewLevDesc.textContent = leverage + 'x leveraged lot size';
 
         if (previewMargin) previewMargin.textContent = '$' + capital.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
         if (previewBuyingPower) previewBuyingPower.textContent = '$' + buyingPower.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -209,7 +373,7 @@ document.addEventListener('DOMContentLoaded', function() {
             approxPrice = 2650.0;
         } else if (rawSym.includes('SOL')) {
             approxPrice = 150.0;
-        } else if (rawSym.includes('EUR') || rawSym.includes('GBP') || rawSym.includes('AUD') || rawSym.includes('JPY')) {
+        } else if (rawSym.includes('EUR') || rawSym.includes('GBP') || rawSym.includes('AUD') || rawSym.includes('JPY') || rawSym.includes('XAU') || rawSym.includes('OIL')) {
             isForex = true;
         } else if (rawSym.includes('BTC')) {
             approxPrice = 78500.0;
@@ -217,8 +381,10 @@ document.addEventListener('DOMContentLoaded', function() {
 
         if (previewLotSize) {
             if (isForex) {
-                // 1 Standard Lot = 100,000 Units
-                const lots = (buyingPower / 100000).toFixed(3);
+                // 1 Standard Lot = 100,000 Units (For Gold 1 lot = 100 oz approx $265,000)
+                const contractSize = rawSym.includes('XAU') ? 100 : 100000;
+                let lots = (buyingPower / (rawSym.includes('XAU') ? (approxPrice * 0.01) : contractSize)).toFixed(2);
+                if (rawSym.includes('XAU')) lots = (buyingPower / 265000).toFixed(2);
                 previewLotSize.textContent = `~${lots} Lots`;
             } else {
                 const coinQty = (buyingPower / approxPrice).toFixed(4);
@@ -228,12 +394,16 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
 
-    if (capitalInput) {
-        capitalInput.addEventListener('input', updateLivePreview);
+    if (capitalInput) capitalInput.addEventListener('input', updateLivePreview);
+    if (leverageInput) {
+        leverageInput.addEventListener('input', function() {
+            const lev = parseFloat(this.value) || 1;
+            updateLeverageButtons(lev);
+            updateLivePreview();
+        });
     }
-    if (symbolInput) {
-        symbolInput.addEventListener('input', updateLivePreview);
-    }
+
+    updateSymbolState();
     updateLivePreview();
 });
 </script>

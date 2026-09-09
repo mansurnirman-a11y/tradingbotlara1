@@ -94,7 +94,12 @@
                                     </div>
                                 @endif
                             </td>
-                            <td style="padding: 1rem;">${{ number_format($bot->allocated_capital, 2) }}</td>
+                            <td style="padding: 1rem;">
+                                <div><strong>${{ number_format($bot->allocated_capital, 2) }}</strong></div>
+                                <div style="font-size: 0.75rem; color: var(--accent-green); font-weight: 600; margin-top: 0.2rem;">
+                                    {{ $bot->parameters['leverage'] ?? 25 }}x Lev
+                                </div>
+                            </td>
                             <td style="padding: 1rem;">
                                 @if($bot->status === 'running')
                                     <span style="color: var(--accent-neon); background: rgba(0, 240, 255, 0.1); padding: 0.25rem 0.75rem; border-radius: 1rem; font-size: 0.875rem;">● Running</span>
@@ -185,13 +190,6 @@
                                             @csrf
                                             <button type="submit" class="btn btn-secondary" style="font-size: 0.8rem; padding: 0.4rem 0.8rem;">
                                                 {{ $bot->status === 'running' ? 'Pause' : 'Start' }}
-                                            </button>
-                                        </form>
-                                        <form method="POST" action="{{ route('bots.destroy', $bot) }}" onsubmit="return confirm('Delete this bot instance permanently?');">
-                                            @csrf
-                                            @method('DELETE')
-                                            <button type="submit" class="btn btn-outline" style="padding: 0.4rem 0.8rem; font-size: 0.8rem; color: var(--accent-red); border-color: rgba(255, 61, 0, 0.3);">
-                                                Delete
                                             </button>
                                         </form>
                                     </div>

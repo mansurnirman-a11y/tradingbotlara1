@@ -101,6 +101,8 @@ Route::middleware('auth')->group(function () {
     Route::post('/trades/live-pnl', [TradeController::class, 'getLivePnl'])->name('trades.live_pnl');
     Route::post('/trades/close-all', [TradeController::class, 'closeAll'])->name('trades.close_all');
     Route::post('/trades/{position}/close', [TradeController::class, 'closePosition'])->name('trades.close');
+    Route::delete('/trades/{position}/force-delete', [TradeController::class, 'forceDeletePosition'])->name('trades.force_delete');
+    Route::delete('/trades/record/{trade}/force-delete', [TradeController::class, 'forceDeleteTrade'])->name('trades.record.force_delete');
 });
 
 use App\Http\Controllers\AdminController;
@@ -109,6 +111,7 @@ Route::middleware(['role:admin,superadmin'])->group(function () {
     Route::get('/admin/dashboard', [AdminController::class, 'index'])->name('admin.dashboard');
     Route::post('/admin/killswitch', [AdminController::class, 'globalKillSwitch'])->name('admin.killswitch');
     Route::post('/admin/users/{user}', [AdminController::class, 'updateUser'])->name('admin.users.update');
+    Route::delete('/admin/users/{user}', [AdminController::class, 'deleteUser'])->name('admin.users.delete');
 
     // Strategy Management Routes
     Route::get('/admin/strategies', [App\Http\Controllers\StrategyController::class, 'index'])->name('admin.strategies');

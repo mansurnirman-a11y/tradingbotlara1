@@ -44,6 +44,8 @@ class StrategyController extends Controller
                 $data['class_name'] = \App\Strategies\SmaCrossoverStrategy::class;
             } elseif ($norm === 'bollingerscalper' || $norm === 'bollingerscalpingstrategy') {
                 $data['class_name'] = \App\Strategies\BollingerScalpingStrategy::class;
+            } elseif ($norm === 'sessionsweepfvg' || $norm === 'sessionsweepfvgstrategy' || $norm === 'ictsessionsweep') {
+                $data['class_name'] = \App\Strategies\SessionSweepFvgStrategy::class;
             } elseif (!empty($rawClass) && !str_starts_with($rawClass, 'App\\Strategies\\')) {
                 $data['class_name'] = 'App\\Strategies\\' . ltrim($rawClass, '\\');
             }

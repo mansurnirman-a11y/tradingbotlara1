@@ -218,6 +218,78 @@
     70% { transform: scale(1); box-shadow: 0 0 0 6px rgba(0, 230, 118, 0); }
     100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(0, 230, 118, 0); }
 }
+
+.gov-form-wrapper {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    background: rgba(0, 0, 0, 0.45);
+    padding: 0.35rem 0.5rem;
+    border-radius: 10px;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.gov-select {
+    background: #0f172a;
+    color: #fff;
+    border: 1px solid rgba(255, 255, 255, 0.18);
+    border-radius: 8px;
+    padding: 0.4rem 0.7rem;
+    font-size: 0.82rem;
+    font-weight: 600;
+    cursor: pointer;
+    outline: none;
+    transition: all 0.2s;
+}
+
+.gov-select:focus {
+    border-color: var(--accent-neon);
+    box-shadow: 0 0 10px rgba(0, 240, 255, 0.3);
+}
+
+.gov-limit-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 8px;
+    padding: 0.3rem 0.6rem;
+    font-size: 0.78rem;
+    color: var(--text-secondary);
+}
+
+.gov-limit-input {
+    width: 42px;
+    background: transparent;
+    border: none;
+    color: var(--accent-neon);
+    font-weight: 700;
+    font-size: 0.88rem;
+    text-align: center;
+    outline: none;
+}
+
+.gov-save-btn {
+    background: linear-gradient(135deg, rgba(0, 240, 255, 0.18), rgba(0, 240, 255, 0.08));
+    color: var(--accent-cyan);
+    border: 1px solid rgba(0, 240, 255, 0.4);
+    padding: 0.4rem 0.85rem;
+    border-radius: 8px;
+    font-size: 0.8rem;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.2s;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+}
+
+.gov-save-btn:hover {
+    background: rgba(0, 240, 255, 0.3);
+    box-shadow: 0 0 12px rgba(0, 240, 255, 0.3);
+    transform: translateY(-1px);
+}
 </style>
 
 <div class="container" style="padding-top: 2.5rem; padding-bottom: 5rem; max-width: 1400px;">
@@ -747,19 +819,26 @@
                             </td>
                             <td style="text-align: right;">
                                 @if($u->id !== Auth::id())
-                                <form method="POST" action="{{ route('admin.users.update', $u->id) }}" onsubmit="if(this.is_active.value === 'delete') { return confirm('🚨 DANGER: Are you sure you want to PERMANENTLY delete user \'{{ addslashes($u->name) }}\'?\n\nThis will remove all bots, broker accounts, open positions and trade records.\n\nThis action CANNOT be undone.'); }" style="display: flex; gap: 0.4rem; align-items: center; justify-content: flex-end; margin: 0;">
+                                <form method="POST" action="{{ route('admin.users.update', $u->id) }}" onsubmit="if(this.is_active.value === 'delete') { return confirm('🚨 DANGER: Are you sure you want to PERMANENTLY delete user \'{{ addslashes($u->name) }}\'?\n\nThis will remove all bots, broker accounts, open positions and trade records.\n\nThis action CANNOT be undone.'); }" style="margin: 0; display: inline-flex; justify-content: flex-end;">
                                     @csrf
-                                    <select name="is_active" class="form-input" style="width: auto; padding: 0.35rem 0.6rem; font-size: 0.8rem; border-radius: 6px; background: rgba(0,0,0,0.5); color: #fff; border: 1px solid rgba(255,255,255,0.15);">
-                                        <option value="1" {{ $u->is_active ? 'selected' : '' }}>Approved</option>
-                                        <option value="0" {{ !$u->is_active ? 'selected' : '' }}>Suspended</option>
-                                        @if(in_array(Auth::user()->role ?? '', ['superadmin', 'admin']) && $u->role !== 'superadmin')
-                                            <option value="delete" style="color: #ff5252; background: #2a1115; font-weight: bold;">🗑️ Delete User</option>
-                                        @endif
-                                    </select>
-                                    <input type="number" name="max_bots" value="{{ $u->max_bots }}" class="form-input" style="width: 55px; padding: 0.35rem 0.4rem; font-size: 0.8rem; border-radius: 6px; background: rgba(0,0,0,0.5); color: #fff; border: 1px solid rgba(255,255,255,0.15); text-align: center;" title="Max Bots Limit">
-                                    <button type="submit" class="btn-ctrl-pause" style="padding: 0.35rem 0.75rem; font-size: 0.78rem;">
-                                        Save
-                                    </button>
+                                    <div class="gov-form-wrapper">
+                                        <select name="is_active" class="gov-select">
+                                            <option value="1" {{ $u->is_active ? 'selected' : '' }}>● Approved</option>
+                                            <option value="0" {{ !$u->is_active ? 'selected' : '' }}>⏸ Suspended</option>
+                                            @if(in_array(Auth::user()->role ?? '', ['superadmin', 'admin']) && $u->role !== 'superadmin')
+                                                <option value="delete" style="color: #ff5252; background: #1e1014; font-weight: bold;">🗑️ Delete User</option>
+                                            @endif
+                                        </select>
+                                        
+                                        <div class="gov-limit-badge" title="Max Trading Bots Allowed">
+                                            <span>Limit:</span>
+                                            <input type="number" name="max_bots" value="{{ $u->max_bots }}" class="gov-limit-input" min="0" max="100">
+                                        </div>
+
+                                        <button type="submit" class="gov-save-btn">
+                                            <i class="fas fa-check"></i> Save
+                                        </button>
+                                    </div>
                                 </form>
                                 @else
                                     <span style="color: var(--text-secondary); font-size: 0.8rem; font-style: italic;">Active Session (You)</span>

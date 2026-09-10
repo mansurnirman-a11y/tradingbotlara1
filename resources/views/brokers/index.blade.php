@@ -219,12 +219,14 @@
                 if(data.balances) {
                     balanceCells.forEach(cell => {
                         const accId = cell.dataset.accountId;
-                        if (data.balances[accId]) {
+                        if (data.balances && data.balances[accId] !== undefined) {
                             const bal = data.balances[accId];
+                            const curr = (data.currencies && data.currencies[accId]) ? data.currencies[accId] : 'USD';
                             if (bal === 'Error/API limits' || bal === 'API Error/Blocked' || bal === 'Error') {
                                 cell.innerHTML = `<span style="color: var(--accent-red); font-size: 0.9rem;">${bal}</span>`;
                             } else {
-                                cell.innerHTML = `<span style="color: var(--accent-green);">$${bal}</span> <span style="font-size: 0.75rem; color: var(--text-secondary);">USDT</span>`;
+                                const symbolPrefix = (curr === 'INR' ? '₹' : (curr === 'EUR' ? '€' : (curr === 'GBP' ? '£' : '$')));
+                                cell.innerHTML = `<span style="color: var(--accent-green);">${symbolPrefix}${bal}</span> <span style="font-size: 0.75rem; color: var(--text-secondary);">${curr}</span>`;
                             }
                         }
                     });

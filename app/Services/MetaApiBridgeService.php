@@ -314,12 +314,17 @@ class MetaApiBridgeService
                     return array_map(function($pos) {
                         return [
                             'id' => $pos['id'] ?? '',
+                            'ticket' => $pos['id'] ?? '',
                             'symbol' => $pos['symbol'] ?? '',
                             'side' => strtoupper($pos['type'] ?? '') === 'POSITION_TYPE_BUY' ? 'LONG' : 'SHORT',
                             'contracts' => floatval($pos['volume'] ?? 0),
+                            'amount' => floatval($pos['volume'] ?? 0),
                             'entryPrice' => floatval($pos['openPrice'] ?? 0),
+                            'entry_price' => floatval($pos['openPrice'] ?? 0),
                             'currentPrice' => floatval($pos['currentPrice'] ?? 0),
+                            'current_price' => floatval($pos['currentPrice'] ?? 0),
                             'unrealizedPnl' => floatval($pos['unrealizedProfit'] ?? 0),
+                            'unrealized_pnl' => floatval($pos['unrealizedProfit'] ?? 0),
                         ];
                     }, $response->json());
                 }
@@ -329,6 +334,16 @@ class MetaApiBridgeService
         }
 
         return [];
+    }
+
+    public function fetchPositions(): array
+    {
+        return $this->getOpenPositions();
+    }
+
+    public function fetch_positions(): array
+    {
+        return $this->getOpenPositions();
     }
 
     /**

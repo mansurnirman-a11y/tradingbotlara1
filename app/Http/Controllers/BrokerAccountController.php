@@ -101,7 +101,10 @@ class BrokerAccountController extends Controller
     {
         $accountIds = $request->input('account_ids', []);
         
-        $query = BrokerAccount::whereIn('id', $accountIds)->where('is_active', true);
+        $query = BrokerAccount::where('is_active', true);
+        if (!empty($accountIds)) {
+            $query->whereIn('id', $accountIds);
+        }
         
         // If not admin, restrict to own accounts
         if (!in_array(Auth::user()->role, ['admin', 'superadmin'])) {
@@ -110,17 +113,37 @@ class BrokerAccountController extends Controller
         
         $accounts = $query->get();
         $balances = [];
+        $currencies = [];
+        $details = [];
         
         foreach ($accounts as $account) {
             try {
                 $exchange = new \App\Services\ExchangeService($account);
-                $totalBal = $exchange->getAvailableBalance();
-                $balances[$account->id] = number_format($totalBal, 2);
-            } catch (\Exception $e) {
-                $balances[$account->id] = 'Error/API limits';
+                $balInfo = $exchange->fetchBalanceDetails();
+                $balances[$account->id] = number_format($balInfo['free'], 2);
+                $currencies[$account->id] = $balInfo['currency'];
+                $details[$account->id] = [
+                    'balance' => $balInfo['free'],
+                    'total' => $balInfo['total'],
+                    'currency' => $balInfo['currency'],
+                    'formatted' => $balInfo['formatted'],
+                ];
+            } catch (\Throwable $e) {
+                $balances[$account->id] = 'Error';
+                $currencies[$account->id] = 'USD';
+                $details[$account->id] = [
+                    'balance' => 0,
+                    'total' => 0,
+                    'currency' => 'USD',
+                    'formatted' => 'Error/API limits',
+                ];
             }
         }
 
-        return response()->json(['balances' => $balances]);
+        return response()->json([
+            'balances' => $balances,
+            'currencies' => $currencies,
+            'details' => $details,
+        ]);
     }
 }

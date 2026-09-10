@@ -55,13 +55,16 @@ class BotInstanceController extends Controller
         $accounts = Auth::user()->brokerAccounts()->where('is_active', true)->get();
         
         $balances = [];
+        $currencies = [];
         foreach ($accounts as $account) {
             try {
                 $exchange = new \App\Services\ExchangeService($account);
-                $bal = $exchange->getAvailableBalance();
-                $balances[$account->id] = number_format($bal, 2);
-            } catch (\Exception $e) {
+                $balInfo = $exchange->fetchBalanceDetails();
+                $balances[$account->id] = number_format($balInfo['free'], 2);
+                $currencies[$account->id] = $balInfo['currency'];
+            } catch (\Throwable $e) {
                 $balances[$account->id] = 'Error';
+                $currencies[$account->id] = 'USD';
             }
         }
 
@@ -72,7 +75,7 @@ class BotInstanceController extends Controller
                     $exchange = new \App\Services\ExchangeService($bot->brokerAccount);
                     $price = $exchange->fetchTicker($bot->symbol);
                     $botPrices[$bot->id] = $price ? number_format($price, 2) : '---';
-                } catch (\Exception $e) {
+                } catch (\Throwable $e) {
                     $botPrices[$bot->id] = '---';
                 }
             }
@@ -80,6 +83,7 @@ class BotInstanceController extends Controller
 
         return response()->json([
             'balances' => $balances,
+            'currencies' => $currencies,
             'botPrices' => $botPrices
         ]);
     }

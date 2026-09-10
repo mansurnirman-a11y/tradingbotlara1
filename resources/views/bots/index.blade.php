@@ -84,7 +84,7 @@
                         @foreach($bots as $bot)
                         <tr style="border-bottom: 1px solid rgba(255,255,255,0.02);">
                             <td style="padding: 1rem; font-family: monospace;">#{{ str_pad($bot->id, 4, '0', STR_PAD_LEFT) }}</td>
-                            <td style="padding: 1rem;">{{ $bot->brokerAccount->account_label }}</td>
+                            <td style="padding: 1rem;">{{ $bot->brokerAccount->account_label ?? 'N/A' }}</td>
                             <td style="padding: 1rem;">
                                 <strong>{{ $bot->symbol }}</strong> ({{ $bot->timeframe }})<br>
                                 <span style="font-size: 0.8rem; color: var(--text-secondary);">{{ class_basename($bot->strategy_class) }}</span>
@@ -238,14 +238,16 @@
     document.addEventListener('DOMContentLoaded', () => {
         let receivedWsUpdate = false;
 
-        function updateUI(balances, botPrices) {
+        function updateUI(balances, botPrices, currencies = {}) {
             // Update Wallet Balances
             if (balances) {
                 for (const [id, bal] of Object.entries(balances)) {
                     const el = document.getElementById('balance-' + id);
                     if (el) {
+                        const curr = currencies[id] || 'USD';
+                        const symbolPrefix = (curr === 'INR' ? '₹' : (curr === 'EUR' ? '€' : (curr === 'GBP' ? '£' : '$')));
                         if (bal !== null && !isNaN(bal) && bal !== 'Error' && bal !== 'API Error' && bal !== 'Error/API limits') {
-                            el.innerHTML = '<strong>$' + Number(bal).toFixed(2) + '</strong> <span style="font-size: 0.8rem; color: var(--text-secondary);">USDT</span>';
+                            el.innerHTML = '<strong>' + symbolPrefix + Number(bal).toFixed(2) + '</strong> <span style="font-size: 0.8rem; color: var(--text-secondary);">' + curr + '</span>';
                         } else {
                             el.innerHTML = '<span style="color: var(--accent-red); font-size: 1rem;">' + bal + '</span>';
                         }
@@ -282,7 +284,7 @@
                 .then(res => res.json())
                 .then(data => {
                     console.log('Polled Live Data Fallback:', data);
-                    updateUI(data.balances, data.botPrices);
+                    updateUI(data.balances, data.botPrices, data.currencies || {});
                 })
                 .catch(err => console.error('Error fetching live data fallback:', err));
         }

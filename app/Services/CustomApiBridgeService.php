@@ -16,13 +16,13 @@ class CustomApiBridgeService
 
     public function __construct(BrokerAccount $account)
     {
-        $this->baseUrl = rtrim($account->bridge_url, '/');
+        $this->baseUrl = !empty($account->bridge_url) ? rtrim($account->bridge_url, '/') : 'http://127.0.0.1:5000';
         $this->apiKey = $account->api_key;
         $this->apiSecret = $account->api_secret;
         $this->broker = $account->broker;
 
         if (empty($this->baseUrl)) {
-            throw new Exception("Custom API / Bridge URL is required for localhost or custom API connection.");
+            $this->baseUrl = 'http://127.0.0.1:5000';
         }
     }
 
@@ -376,6 +376,11 @@ class CustomApiBridgeService
             ];
         }
         return $formatted;
+    }
+
+    public function getOpenPositions(): array
+    {
+        return $this->fetch_positions();
     }
 
     /**

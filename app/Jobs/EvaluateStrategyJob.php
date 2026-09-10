@@ -76,7 +76,7 @@ class EvaluateStrategyJob implements ShouldQueue
 
             $currentPrice = $candles[count($candles)-1][4];
 
-            // 3.5 Fetch Open Position & Sync
+            // 3.5 Fetch Open Position & Sync Ground Truth from Broker
             $openPosition = Position::where('bot_instance_id', $this->bot->id)
                                     ->where('status', 'OPEN')
                                     ->first();
@@ -84,72 +84,40 @@ class EvaluateStrategyJob implements ShouldQueue
             // Position Sync System
             if ($openPosition) {
                 try {
-                    $exchangePositions = [];
-                    // Handle CCXT vs MetaApi method names
-                    if (is_callable([$exchangeService->getClient(), 'fetch_positions'])) {
-                        $exchangePositions = $exchangeService->getClient()->fetch_positions();
-                    } elseif (is_callable([$exchangeService->getClient(), 'fetchPositions'])) {
-                        $exchangePositions = $exchangeService->getClient()->fetchPositions();
-                    }
-                    
+                    $exchangePositions = $exchangeService->getOpenPositions();
                     $isActive = false;
-                    
-                    if (is_array($exchangePositions) && count($exchangePositions) > 0) {
+
+                    if (!empty($exchangePositions)) {
                         foreach ($exchangePositions as $ep) {
-                            $epSymbol = $ep['symbol'] ?? $ep['product_symbol'] ?? $ep['info']['product_symbol'] ?? '';
-                            if (str_replace(['/', '-', ':'], '', $epSymbol) === str_replace(['/', '-', ':'], '', $this->bot->symbol)) {
-                                $contracts = floatval($ep['contracts'] ?? $ep['size'] ?? $ep['amount'] ?? 0);
-                                $exchangeSide = $contracts > 0 ? 'LONG' : ($contracts < 0 ? 'SHORT' : '');
-                                
-                                if (abs($contracts) > 0 && ($exchangeSide === $openPosition->side || empty($exchangeSide))) {
+                            if (ExchangeService::symbolsMatch($ep['symbol'], $this->bot->symbol)) {
+                                $epSide = strtoupper($ep['side'] ?? '');
+                                $contracts = floatval($ep['contracts'] ?? $ep['quantity'] ?? 0);
+
+                                if ($contracts > 0 && ($epSide === $openPosition->side || empty($epSide))) {
                                     $isActive = true;
-                                    
+
                                     // UPDATE LOCAL POSITION WITH EXACT BROKER DATA (Entry Price AND Quantity)
                                     $updates = [];
-                                    $actualEntryPrice = $ep['entryPrice'] ?? $ep['entry_price'] ?? $ep['averageEntryPrice'] ?? $ep['info']['entry_price'] ?? null;
-                                    if ($actualEntryPrice && (float)$actualEntryPrice != (float)$openPosition->entry_price) {
-                                        $updates['entry_price'] = (float)$actualEntryPrice;
+                                    $actualEntryPrice = floatval($ep['entry_price'] ?? $ep['entryPrice'] ?? 0);
+                                    if ($actualEntryPrice > 0 && abs($actualEntryPrice - floatval($openPosition->entry_price)) > 0.0001) {
+                                        $updates['entry_price'] = $actualEntryPrice;
                                     }
 
-                                    $actualQuantity = abs(floatval($ep['contracts'] ?? $ep['size'] ?? $ep['amount'] ?? 0));
-                                    if ($actualQuantity > 0 && (float)$actualQuantity != (float)$openPosition->quantity) {
-                                        $updates['quantity'] = (float)$actualQuantity;
+                                    if ($contracts > 0 && abs($contracts - floatval($openPosition->quantity)) > 0.000001) {
+                                        $updates['quantity'] = $contracts;
                                     }
 
                                     if (!empty($updates)) {
                                         $openPosition->update($updates);
                                     }
-                                    
+
                                     break;
                                 }
                             }
                         }
-
-                        // Only auto-close if exchange is CCXT and confirmed active list did not include this position
-                        $isCustomBroker = in_array($this->bot->brokerAccount->broker ?? '', ['oanda', 'custom_api', 'mt4', 'mt5']);
-                        if (!$isActive && !$isCustomBroker) {
-                            $contractSize = $exchangeService->getContractSize($this->bot->symbol);
-                            $pnl = $openPosition->side === 'LONG'
-                                ? ($currentPrice - $openPosition->entry_price) * ($openPosition->quantity * $contractSize)
-                                : ($openPosition->entry_price - $currentPrice) * ($openPosition->quantity * $contractSize);
-
-                            $openPosition->update([
-                                'status' => 'CLOSED',
-                                'closed_at' => now(),
-                                'exit_price' => $currentPrice, // Fallback exit price
-                                'realized_pnl' => $pnl,
-                            ]);
-
-                            // Update bot allocated capital dynamically
-                            $newCapital = max(0, round(floatval($this->bot->allocated_capital) + $pnl, 4));
-                            $this->bot->update(['allocated_capital' => $newCapital]);
-                            $this->bot->allocated_capital = $newCapital;
-
-                            $openPosition = null; // Clear local reference
-                        }
                     }
                 } catch (\Throwable $syncError) {
-                    // If API fails, assume it's still open to prevent duplicate orders
+                    \Log::warning("Bot {$this->bot->id} position sync notice: " . $syncError->getMessage());
                 }
             }
 

@@ -371,7 +371,6 @@ document.addEventListener('DOMContentLoaded', function() {
     const symbolSelect = document.getElementById('symbol_select');
     const symbolInput = document.getElementById('symbol_input');
     const symbolTypeBadge = document.getElementById('symbol_type_badge');
-    const brokerSelect = document.querySelector('select[name="broker_account_id"]');
 
     const previewMargin = document.getElementById('preview_margin');
     const previewBuyingPower = document.getElementById('preview_buying_power');

@@ -209,14 +209,51 @@ class BotInstanceController extends Controller
 
     public function create()
     {
-        $accounts = Auth::user()->brokerAccounts()->where('is_active', true)->get();
+        $authUser = Auth::user();
+        $isAdmin = in_array($authUser->role, ['admin', 'superadmin']) || (method_exists($authUser, 'isAdmin') && $authUser->isAdmin());
+        
+        $users = null;
+        $userAccountsMap = [];
+        
+        if ($isAdmin) {
+            $users = \App\Models\User::where('is_active', true)->orderBy('name')->get();
+            $allAccounts = \App\Models\BrokerAccount::where('is_active', true)->get();
+            foreach ($allAccounts as $acc) {
+                $userAccountsMap[$acc->user_id][] = [
+                    'id' => $acc->id,
+                    'label' => ($acc->account_label ?: 'Account #' . $acc->id) . ' (' . strtoupper(str_replace('_', ' ', $acc->broker)) . ')',
+                    'broker' => $acc->broker,
+                ];
+            }
+        }
+        
+        $accounts = $authUser->brokerAccounts()->where('is_active', true)->get();
         $strategies = \App\Models\Strategy::where('is_active', true)->get();
-        return view('bots.create', compact('accounts', 'strategies'));
+        
+        return view('bots.create', compact('accounts', 'strategies', 'users', 'userAccountsMap', 'isAdmin'));
+    }
+
+    public function getUserBrokerAccounts(\App\Models\User $user)
+    {
+        if (!Auth::user()->isAdmin()) {
+            abort(403);
+        }
+        $accounts = $user->brokerAccounts()->where('is_active', true)->get()->map(function($acc) {
+            return [
+                'id' => $acc->id,
+                'label' => ($acc->account_label ?: 'Account #' . $acc->id) . ' (' . strtoupper(str_replace('_', ' ', $acc->broker)) . ')',
+                'broker' => $acc->broker,
+            ];
+        });
+        return response()->json($accounts);
     }
 
     public function store(Request $request)
     {
-        $validated = $request->validate([
+        $authUser = Auth::user();
+        $isAdmin = in_array($authUser->role, ['admin', 'superadmin']) || (method_exists($authUser, 'isAdmin') && $authUser->isAdmin());
+
+        $rules = [
             'broker_account_id' => 'required|exists:broker_accounts,id',
             'symbol' => 'required|string|max:20',
             'timeframe' => 'required|string|in:1m,5m,15m,1h,4h,1d',
@@ -226,25 +263,34 @@ class BotInstanceController extends Controller
             'take_profit_pct' => 'required|numeric|min:0',
             'stop_loss_pct' => 'required|numeric|min:0',
             'leverage' => 'nullable|numeric|min:1|max:500',
-        ]);
+        ];
 
-        // Ensure the broker account actually belongs to this user
-        $account = Auth::user()->brokerAccounts()->findOrFail($validated['broker_account_id']);
-
-        $user = Auth::user();
-
-        if (!$user->is_active) {
-            return back()->withErrors('Your account is pending approval. You cannot create bots yet.');
+        if ($isAdmin) {
+            $rules['user_id'] = 'nullable|exists:users,id';
         }
 
-        if ($user->botInstances()->count() >= $user->max_bots) {
-            return back()->withErrors("You have reached your maximum bot limit ({$user->max_bots}). Contact an administrator to upgrade.");
+        $validated = $request->validate($rules);
+
+        $targetUser = $authUser;
+        if ($isAdmin && !empty($validated['user_id'])) {
+            $targetUser = \App\Models\User::findOrFail($validated['user_id']);
+        }
+
+        // Ensure the broker account belongs to targetUser
+        $account = $targetUser->brokerAccounts()->where('is_active', true)->findOrFail($validated['broker_account_id']);
+
+        if (!$targetUser->is_active) {
+            return back()->withErrors('The selected user account is pending approval or inactive.');
+        }
+
+        if (!$isAdmin && $targetUser->botInstances()->count() >= $targetUser->max_bots) {
+            return back()->withErrors("User has reached their maximum bot limit ({$targetUser->max_bots}). Contact an administrator to upgrade.");
         }
 
         $strategy = \App\Models\Strategy::findOrFail($validated['strategy_id']);
 
         BotInstance::create([
-            'user_id' => $user->id,
+            'user_id' => $targetUser->id,
             'broker_account_id' => $account->id,
             'strategy_id' => $strategy->id,
             'name' => $validated['symbol'] . ' - ' . $strategy->name,
@@ -261,7 +307,11 @@ class BotInstanceController extends Controller
             'status' => 'stopped',
         ]);
 
-        return redirect()->route('bots.index')->with('success', 'Trading bot launched successfully.');
+        $msg = $targetUser->id === $authUser->id 
+            ? 'Trading bot launched successfully.'
+            : "Trading bot successfully created for client {$targetUser->name} ({$targetUser->email}).";
+
+        return redirect()->route('bots.index')->with('success', $msg);
     }
 
     public function toggleStatus(BotInstance $bot)

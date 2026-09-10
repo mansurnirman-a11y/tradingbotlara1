@@ -24,6 +24,37 @@
         <form method="POST" action="{{ route('bots.store') }}">
             @csrf
 
+            @if(isset($isAdmin) && $isAdmin && isset($users) && count($users) > 0)
+                <div style="background: linear-gradient(135deg, rgba(255, 171, 0, 0.08), rgba(255, 215, 0, 0.03)); border: 1px solid rgba(255, 171, 0, 0.3); border-radius: 12px; padding: 1.25rem 1.5rem; margin-bottom: 1.75rem;">
+                    <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.75rem;">
+                        <div style="display: flex; align-items: center; gap: 0.5rem;">
+                            <span style="background: #ffab00; color: #000; font-size: 0.75rem; font-weight: 800; padding: 0.2rem 0.6rem; border-radius: 4px; text-transform: uppercase;">👑 Superadmin Control</span>
+                            <span style="font-weight: 600; color: #fff; font-size: 0.95rem;">Deploy Bot For Client / User</span>
+                        </div>
+                        <span style="font-size: 0.75rem; color: #ffab00;">Elevated Access</span>
+                    </div>
+
+                    <div class="form-group" style="margin-bottom: 0;">
+                        <label class="form-label" style="font-weight: 600; color: #ffd54f;">Select Target User / Client</label>
+                        <select name="user_id" id="admin_target_user_select" class="form-input" style="background: rgba(0,0,0,0.6); border-color: rgba(255, 171, 0, 0.4); color: #fff;">
+                            <option value="{{ Auth::id() }}">👤 Myself ({{ Auth::user()->name }} - {{ Auth::user()->email }})</option>
+                            @foreach($users as $u)
+                                @if($u->id !== Auth::id())
+                                    <option value="{{ $u->id }}">{{ $u->name }} ({{ $u->email }}) — Role: {{ strtoupper($u->role) }}</option>
+                                @endif
+                            @endforeach
+                        </select>
+                        <small class="text-secondary" style="display: block; margin-top: 0.35rem; font-size: 0.75rem;">
+                            Selecting a client dynamically loads their linked broker accounts and assigns this bot to their portfolio.
+                        </small>
+                    </div>
+
+                    <div id="no_broker_warning" style="display: none; margin-top: 0.75rem; padding: 0.6rem 0.9rem; background: rgba(255, 61, 0, 0.15); border: 1px solid rgba(255, 61, 0, 0.3); border-radius: 6px; color: #ff8a80; font-size: 0.8rem;">
+                        ⚠️ <strong>Warning:</strong> Selected client has no active broker accounts connected. Please connect a broker account for this user first.
+                    </div>
+                </div>
+            @endif
+
             <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; margin-bottom: 1.5rem;">
                 <div class="form-group" style="margin-bottom: 0;">
                     <label class="form-label">Select Broker Account</label>
@@ -196,6 +227,45 @@
 
 <script>
 document.addEventListener('DOMContentLoaded', function() {
+    const userAccountsMap = @json($userAccountsMap ?? []);
+    const adminUserSelect = document.getElementById('admin_target_user_select');
+    const brokerSelect = document.querySelector('select[name="broker_account_id"]');
+    const noBrokerWarning = document.getElementById('no_broker_warning');
+
+    if (adminUserSelect && brokerSelect) {
+        adminUserSelect.addEventListener('change', function() {
+            const selectedUserId = this.value;
+            const accounts = userAccountsMap[selectedUserId] || [];
+            
+            brokerSelect.innerHTML = '<option value="">-- Choose Connection --</option>';
+            
+            if (accounts.length > 0) {
+                if (noBrokerWarning) noBrokerWarning.style.display = 'none';
+                accounts.forEach(acc => {
+                    const opt = document.createElement('option');
+                    opt.value = acc.id;
+                    opt.textContent = acc.label;
+                    brokerSelect.appendChild(opt);
+                });
+                brokerSelect.disabled = false;
+                brokerSelect.style.opacity = '1';
+                
+                if (accounts.length === 1) {
+                    brokerSelect.selectedIndex = 1;
+                    brokerSelect.dispatchEvent(new Event('change'));
+                }
+            } else {
+                if (noBrokerWarning) noBrokerWarning.style.display = 'block';
+                const opt = document.createElement('option');
+                opt.value = '';
+                opt.textContent = '❌ No Active Broker for this User';
+                brokerSelect.appendChild(opt);
+                brokerSelect.disabled = true;
+                brokerSelect.style.opacity = '0.6';
+            }
+        });
+    }
+
     const strategySelect = document.querySelector('select[name="strategy_id"]');
     const tpInput = document.querySelector('input[name="take_profit_pct"]');
     const slInput = document.querySelector('input[name="stop_loss_pct"]');

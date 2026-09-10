@@ -216,18 +216,21 @@ class BotInstanceController extends Controller
         $userAccountsMap = [];
         
         if ($isAdmin) {
-            $users = \App\Models\User::where('is_active', true)->orderBy('name')->get();
-            $allAccounts = \App\Models\BrokerAccount::where('is_active', true)->get();
+            $users = \App\Models\User::orderBy('name')->get();
+            $allAccounts = \App\Models\BrokerAccount::get();
             foreach ($allAccounts as $acc) {
-                $userAccountsMap[$acc->user_id][] = [
+                $brokerName = $acc->broker ?: ($acc->broker_type ?: 'Broker');
+                $label = $acc->account_label ?: ($acc->name ?: ($brokerName . ' #' . $acc->id));
+                $userAccountsMap[(string)$acc->user_id][] = [
                     'id' => $acc->id,
-                    'label' => ($acc->account_label ?: 'Account #' . $acc->id) . ' (' . strtoupper(str_replace('_', ' ', $acc->broker)) . ')',
-                    'broker' => $acc->broker,
+                    'label' => $label . ' (' . strtoupper(str_replace('_', ' ', $brokerName)) . ')' . ($acc->is_active ? '' : ' [Inactive]'),
+                    'broker' => $brokerName,
+                    'is_active' => (bool)$acc->is_active,
                 ];
             }
         }
         
-        $accounts = $authUser->brokerAccounts()->where('is_active', true)->get();
+        $accounts = $authUser->brokerAccounts()->get();
         $strategies = \App\Models\Strategy::where('is_active', true)->get();
         
         return view('bots.create', compact('accounts', 'strategies', 'users', 'userAccountsMap', 'isAdmin'));
@@ -238,11 +241,14 @@ class BotInstanceController extends Controller
         if (!Auth::user()->isAdmin()) {
             abort(403);
         }
-        $accounts = $user->brokerAccounts()->where('is_active', true)->get()->map(function($acc) {
+        $accounts = $user->brokerAccounts()->get()->map(function($acc) {
+            $brokerName = $acc->broker ?: ($acc->broker_type ?: 'Broker');
+            $label = $acc->account_label ?: ($acc->name ?: ($brokerName . ' #' . $acc->id));
             return [
                 'id' => $acc->id,
-                'label' => ($acc->account_label ?: 'Account #' . $acc->id) . ' (' . strtoupper(str_replace('_', ' ', $acc->broker)) . ')',
-                'broker' => $acc->broker,
+                'label' => $label . ' (' . strtoupper(str_replace('_', ' ', $brokerName)) . ')' . ($acc->is_active ? '' : ' [Inactive]'),
+                'broker' => $brokerName,
+                'is_active' => (bool)$acc->is_active,
             ];
         });
         return response()->json($accounts);
@@ -277,7 +283,7 @@ class BotInstanceController extends Controller
         }
 
         // Ensure the broker account belongs to targetUser
-        $account = $targetUser->brokerAccounts()->where('is_active', true)->findOrFail($validated['broker_account_id']);
+        $account = $targetUser->brokerAccounts()->findOrFail($validated['broker_account_id']);
 
         if (!$targetUser->is_active) {
             return back()->withErrors('The selected user account is pending approval or inactive.');

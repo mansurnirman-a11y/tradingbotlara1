@@ -232,38 +232,73 @@ document.addEventListener('DOMContentLoaded', function() {
     const brokerSelect = document.querySelector('select[name="broker_account_id"]');
     const noBrokerWarning = document.getElementById('no_broker_warning');
 
+    function renderBrokerOptions(accounts) {
+        if (!brokerSelect) return;
+        brokerSelect.innerHTML = '<option value="">-- Choose Connection --</option>';
+        
+        if (accounts && accounts.length > 0) {
+            if (noBrokerWarning) noBrokerWarning.style.display = 'none';
+            accounts.forEach(acc => {
+                const opt = document.createElement('option');
+                opt.value = acc.id;
+                opt.textContent = acc.label;
+                brokerSelect.appendChild(opt);
+            });
+            brokerSelect.disabled = false;
+            brokerSelect.style.opacity = '1';
+            
+            if (accounts.length === 1) {
+                brokerSelect.selectedIndex = 1;
+                brokerSelect.dispatchEvent(new Event('change'));
+            }
+        } else {
+            if (noBrokerWarning) noBrokerWarning.style.display = 'block';
+            const opt = document.createElement('option');
+            opt.value = '';
+            opt.textContent = '❌ No Active Broker Connected for this User';
+            brokerSelect.appendChild(opt);
+            brokerSelect.disabled = true;
+            brokerSelect.style.opacity = '0.6';
+        }
+    }
+
+    async function loadUserBrokers(userId) {
+        if (!userId) return;
+        
+        // 1. Try instant preloaded data first
+        const key = String(userId);
+        let accounts = userAccountsMap && userAccountsMap[key] ? userAccountsMap[key] : null;
+
+        if (accounts && accounts.length > 0) {
+            renderBrokerOptions(accounts);
+            return;
+        }
+
+        // 2. Fallback to live server AJAX fetch
+        try {
+            brokerSelect.innerHTML = '<option value="">⏳ Loading broker connections...</option>';
+            const res = await fetch(`/admin/users/${userId}/broker-accounts`);
+            if (res.ok) {
+                accounts = await res.json();
+                renderBrokerOptions(accounts || []);
+            } else {
+                renderBrokerOptions([]);
+            }
+        } catch (err) {
+            console.error('Failed to load user broker accounts:', err);
+            renderBrokerOptions([]);
+        }
+    }
+
     if (adminUserSelect && brokerSelect) {
         adminUserSelect.addEventListener('change', function() {
-            const selectedUserId = this.value;
-            const accounts = userAccountsMap[selectedUserId] || [];
-            
-            brokerSelect.innerHTML = '<option value="">-- Choose Connection --</option>';
-            
-            if (accounts.length > 0) {
-                if (noBrokerWarning) noBrokerWarning.style.display = 'none';
-                accounts.forEach(acc => {
-                    const opt = document.createElement('option');
-                    opt.value = acc.id;
-                    opt.textContent = acc.label;
-                    brokerSelect.appendChild(opt);
-                });
-                brokerSelect.disabled = false;
-                brokerSelect.style.opacity = '1';
-                
-                if (accounts.length === 1) {
-                    brokerSelect.selectedIndex = 1;
-                    brokerSelect.dispatchEvent(new Event('change'));
-                }
-            } else {
-                if (noBrokerWarning) noBrokerWarning.style.display = 'block';
-                const opt = document.createElement('option');
-                opt.value = '';
-                opt.textContent = '❌ No Active Broker for this User';
-                brokerSelect.appendChild(opt);
-                brokerSelect.disabled = true;
-                brokerSelect.style.opacity = '0.6';
-            }
+            loadUserBrokers(this.value);
         });
+
+        // If a client was already selected or on initial page load
+        if (adminUserSelect.value) {
+            loadUserBrokers(adminUserSelect.value);
+        }
     }
 
     const strategySelect = document.querySelector('select[name="strategy_id"]');

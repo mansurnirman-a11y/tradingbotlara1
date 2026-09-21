@@ -310,7 +310,7 @@ class BotInstanceController extends Controller
             'parameters' => [
                 'take_profit_pct' => $validated['take_profit_pct'],
                 'stop_loss_pct' => $validated['stop_loss_pct'],
-                'leverage' => floatval($validated['leverage'] ?? 25),
+                'leverage' => floatval($validated['leverage'] ?? 50),
                 'trail_points' => ($strategy->class_name === \App\Strategies\EmaReversalBreakoutStrategy::class) ? 50.0 : null,
                 'take_profit_points' => ($strategy->class_name === \App\Strategies\EmaReversalBreakoutStrategy::class) ? 400.0 : null,
                 'signal_to_signal' => ($strategy->class_name === \App\Strategies\EmaCrossoverStrategy::class) ? true : false,

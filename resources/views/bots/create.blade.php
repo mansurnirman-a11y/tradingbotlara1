@@ -150,21 +150,21 @@
             <div class="form-group" style="margin-bottom: 1.5rem;">
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
                     <label class="form-label" style="margin-bottom: 0; font-weight: 600;">Trading Leverage (Multiplier)</label>
-                    <span id="leverage_display_badge" style="background: rgba(0, 230, 118, 0.15); color: var(--accent-green); font-size: 0.8rem; font-weight: 700; padding: 0.2rem 0.6rem; border-radius: 6px; border: 1px solid rgba(0, 230, 118, 0.3);">25x Selected</span>
+                    <span id="leverage_display_badge" style="background: rgba(0, 230, 118, 0.15); color: var(--accent-green); font-size: 0.8rem; font-weight: 700; padding: 0.2rem 0.6rem; border-radius: 6px; border: 1px solid rgba(0, 230, 118, 0.3);">50x Selected</span>
                 </div>
                 
                 <div style="display: flex; gap: 0.5rem; margin-bottom: 0.75rem; flex-wrap: wrap;">
                     <button type="button" class="btn-lev" data-lev="1" style="background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); color: #fff; padding: 0.4rem 0.8rem; border-radius: 6px; cursor: pointer; font-size: 0.85rem; transition: all 0.2s;">1x (Spot)</button>
                     <button type="button" class="btn-lev" data-lev="5" style="background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); color: #fff; padding: 0.4rem 0.8rem; border-radius: 6px; cursor: pointer; font-size: 0.85rem; transition: all 0.2s;">5x</button>
                     <button type="button" class="btn-lev" data-lev="10" style="background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); color: #fff; padding: 0.4rem 0.8rem; border-radius: 6px; cursor: pointer; font-size: 0.85rem; transition: all 0.2s;">10x</button>
-                    <button type="button" class="btn-lev active" data-lev="25" style="background: var(--accent-green); border: 1px solid var(--accent-green); color: #000; font-weight: 700; padding: 0.4rem 0.8rem; border-radius: 6px; cursor: pointer; font-size: 0.85rem; transition: all 0.2s;">25x (Default)</button>
-                    <button type="button" class="btn-lev" data-lev="50" style="background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); color: #fff; padding: 0.4rem 0.8rem; border-radius: 6px; cursor: pointer; font-size: 0.85rem; transition: all 0.2s;">50x</button>
+                    <button type="button" class="btn-lev" data-lev="25" style="background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); color: #fff; padding: 0.4rem 0.8rem; border-radius: 6px; cursor: pointer; font-size: 0.85rem; transition: all 0.2s;">25x</button>
+                    <button type="button" class="btn-lev active" data-lev="50" style="background: var(--accent-green); border: 1px solid var(--accent-green); color: #000; font-weight: 700; padding: 0.4rem 0.8rem; border-radius: 6px; cursor: pointer; font-size: 0.85rem; transition: all 0.2s;">50x (Default)</button>
                     <button type="button" class="btn-lev" data-lev="100" style="background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); color: #fff; padding: 0.4rem 0.8rem; border-radius: 6px; cursor: pointer; font-size: 0.85rem; transition: all 0.2s;">100x</button>
                 </div>
                 
                 <div style="display: flex; align-items: center; gap: 0.75rem;">
                     <div style="position: relative; max-width: 140px;">
-                        <input type="number" step="1" min="1" max="500" name="leverage" id="leverage_input" class="form-input" required placeholder="e.g., 25" value="25" style="padding-right: 2rem;">
+                        <input type="number" step="1" min="1" max="500" name="leverage" id="leverage_input" class="form-input" required placeholder="e.g., 50" value="50" style="padding-right: 2rem;">
                         <span style="position: absolute; right: 0.75rem; top: 50%; transform: translateY(-50%); color: var(--text-secondary); font-size: 0.85rem; font-weight: 600;">x</span>
                     </div>
                     <small class="text-secondary" style="font-size: 0.75rem;">Choose a preset above or type custom leverage (1x to 500x).</small>
@@ -175,7 +175,7 @@
             <div id="position_preview_card" style="background: rgba(0, 230, 118, 0.04); border: 1px solid rgba(0, 230, 118, 0.2); border-radius: 12px; padding: 1.25rem 1.5rem; margin-bottom: 2rem; position: relative; overflow: hidden;">
                 <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 1rem; border-bottom: 1px solid rgba(255,255,255,0.08); padding-bottom: 0.75rem;">
                     <div style="display: flex; align-items: center; gap: 0.5rem;">
-                        <span id="preview_top_badge" style="background: var(--accent-green); color: #000; font-size: 0.7rem; font-weight: 700; padding: 0.2rem 0.5rem; border-radius: 4px;">25x LEVERAGE</span>
+                        <span id="preview_top_badge" style="background: var(--accent-green); color: #000; font-size: 0.7rem; font-weight: 700; padding: 0.2rem 0.5rem; border-radius: 4px;">50x LEVERAGE</span>
                         <span style="font-size: 0.9rem; font-weight: 600; color: #fff;">Futures Position & Lot Estimation</span>
                     </div>
                     <span style="font-size: 0.75rem; color: var(--text-secondary);">Calculated Live</span>
@@ -188,19 +188,19 @@
                     </div>
                     <div>
                         <div style="font-size: 0.75rem; color: var(--text-secondary); margin-bottom: 0.2rem;">Futures Multiplier</div>
-                        <div id="preview_multiplier_val" style="font-size: 1.1rem; font-weight: 700; color: var(--accent-green);">25x</div>
+                        <div id="preview_multiplier_val" style="font-size: 1.1rem; font-weight: 700; color: var(--accent-green);">50x</div>
                     </div>
                     <div>
                         <div style="font-size: 0.75rem; color: var(--text-secondary); margin-bottom: 0.2rem;">Total Trade Buying Power</div>
-                        <div id="preview_buying_power" style="font-size: 1.1rem; font-weight: 700; color: var(--accent-green);">$2,500.00</div>
+                        <div id="preview_buying_power" style="font-size: 1.1rem; font-weight: 700; color: var(--accent-green);">$5,000.00</div>
                     </div>
                     <div>
                         <div style="font-size: 0.75rem; color: var(--text-secondary); margin-bottom: 0.2rem;">Est. Lot / Order Size</div>
-                        <div id="preview_lot_size" style="font-size: 1.1rem; font-weight: 700; color: #64b5f6;">~0.0318 BTC</div>
+                        <div id="preview_lot_size" style="font-size: 1.1rem; font-weight: 700; color: #64b5f6;">~0.0637 BTC</div>
                     </div>
                 </div>
                 <div style="margin-top: 0.75rem; font-size: 0.72rem; color: rgba(255,255,255,0.6); display: flex; align-items: center; gap: 0.4rem;">
-                    <span>ℹ️</span> <span>Bot will automatically deploy <strong id="preview_lev_desc">25x leveraged lot size</strong> on your connected broker.</span>
+                    <span>ℹ️</span> <span>Bot will automatically deploy <strong id="preview_lev_desc">50x leveraged lot size</strong> on your connected broker.</span>
                 </div>
             </div>
 

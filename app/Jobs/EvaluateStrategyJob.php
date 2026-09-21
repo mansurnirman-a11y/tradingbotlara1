@@ -420,7 +420,7 @@ class EvaluateStrategyJob implements ShouldQueue
                 // ----------------------------------------------------
                 // CASE B: OPENING NEW POSITION
                 // ----------------------------------------------------
-                $customLeverage = isset($this->bot->parameters['leverage']) ? floatval($this->bot->parameters['leverage']) : null;
+                $customLeverage = isset($this->bot->parameters['leverage']) ? floatval($this->bot->parameters['leverage']) : 50.0;
                 $leverage = $exchangeService->getLeverage($this->bot->symbol, $customLeverage);
                 $positionValue = $this->bot->allocated_capital * $leverage;
 

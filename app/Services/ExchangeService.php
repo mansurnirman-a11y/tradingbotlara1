@@ -392,7 +392,7 @@ class ExchangeService
             return $this->account->getEffectiveLeverage($override);
         }
 
-        return 25.0;
+        return 50.0;
     }
 
     public function getOpenPositions(): array

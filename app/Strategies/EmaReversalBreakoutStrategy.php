@@ -16,7 +16,7 @@ class EmaReversalBreakoutStrategy implements StrategyInterface
      *   - allow_wick_touch (bool, default: true)
      * @return string 'BUY', 'SELL', or 'HOLD'
      */
-    public function evaluate(array $candles, array $parameters): string
+    public function evaluate(array $candles, array $parameters): string|array
     {
         $count = count($candles);
         $emaPeriod = (int)($parameters['ema_period'] ?? 5);

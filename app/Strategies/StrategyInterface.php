@@ -11,7 +11,7 @@ interface StrategyInterface
      * @param array $parameters User defined parameters (e.g. ['rsi_period' => 14])
      * @return string 'BUY', 'SELL', or 'HOLD'
      */
-    public function evaluate(array $candles, array $parameters): string;
+    public function evaluate(array $candles, array $parameters): string|array;
 
     /**
      * Get the historical indicator data for visualization.

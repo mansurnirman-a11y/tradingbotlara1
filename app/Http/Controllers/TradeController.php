@@ -176,6 +176,7 @@ class TradeController extends Controller
             if (!$service) continue;
 
             try {
+                $foundExchangePos = false;
                 $brokerPositions = $service->getOpenPositions();
                 foreach ($brokerPositions as $ep) {
                     if (\App\Services\ExchangeService::symbolsMatch($ep['symbol'], $position->symbol)) {

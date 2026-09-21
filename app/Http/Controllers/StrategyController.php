@@ -46,6 +46,8 @@ class StrategyController extends Controller
                 $data['class_name'] = \App\Strategies\BollingerScalpingStrategy::class;
             } elseif ($norm === 'sessionsweepfvg' || $norm === 'sessionsweepfvgstrategy' || $norm === 'ictsessionsweep') {
                 $data['class_name'] = \App\Strategies\SessionSweepFvgStrategy::class;
+            } elseif ($norm === 'emareversal' || $norm === 'emareversalbreakout' || $norm === 'emareversalbreakoutstrategy') {
+                $data['class_name'] = \App\Strategies\EmaReversalBreakoutStrategy::class;
             } elseif (!empty($rawClass) && !str_starts_with($rawClass, 'App\\Strategies\\')) {
                 $data['class_name'] = 'App\\Strategies\\' . ltrim($rawClass, '\\');
             }

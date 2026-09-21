@@ -178,6 +178,8 @@ class BotInstanceController extends Controller
                 $strategyClass = \App\Strategies\SmaCrossoverStrategy::class;
             } elseif (str_contains($normalized, 'bollinger')) {
                 $strategyClass = \App\Strategies\BollingerScalpingStrategy::class;
+            } elseif (str_contains($normalized, 'emareversal') || str_contains($normalized, 'reversalbreakout')) {
+                $strategyClass = \App\Strategies\EmaReversalBreakoutStrategy::class;
             }
 
             if (!$strategyClass || !class_exists($strategyClass)) {
@@ -309,6 +311,8 @@ class BotInstanceController extends Controller
                 'take_profit_pct' => $validated['take_profit_pct'],
                 'stop_loss_pct' => $validated['stop_loss_pct'],
                 'leverage' => floatval($validated['leverage'] ?? 25),
+                'trail_points' => ($strategy->class_name === \App\Strategies\EmaReversalBreakoutStrategy::class) ? 50.0 : null,
+                'take_profit_points' => ($strategy->class_name === \App\Strategies\EmaReversalBreakoutStrategy::class) ? 400.0 : null,
             ],
             'status' => 'stopped',
         ]);

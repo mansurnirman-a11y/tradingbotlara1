@@ -204,16 +204,60 @@
                 </div>
             </div>
 
-            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; margin-bottom: 2rem;">
+            <!-- Automated Strategy Risk Card (Shown for algorithmic strategies) -->
+            <div id="automated_strategy_card" style="display: none; background: rgba(13, 20, 30, 0.7); border: 1px solid rgba(0, 230, 118, 0.3); border-radius: 12px; padding: 1.25rem; margin-bottom: 2rem; box-shadow: 0 4px 20px rgba(0, 0, 0, 0.35);">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; border-bottom: 1px solid rgba(255, 255, 255, 0.08); padding-bottom: 0.6rem;">
+                    <div style="display: flex; align-items: center; gap: 0.5rem;">
+                        <span style="font-size: 1.15rem;">⚡</span>
+                        <span style="font-size: 0.95rem; font-weight: 700; color: #fff;">Algorithmic Risk Automation</span>
+                    </div>
+                    <span id="auto_badge_text" style="background: rgba(0, 230, 118, 0.15); border: 1px solid rgba(0, 230, 118, 0.4); color: #00e676; padding: 0.2rem 0.65rem; border-radius: 20px; font-size: 0.72rem; font-weight: 700; text-transform: uppercase;">
+                        Strategy Automated
+                    </span>
+                </div>
+
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 1rem;">
+                    <div style="background: rgba(0, 0, 0, 0.35); border: 1px solid rgba(255, 255, 255, 0.05); border-radius: 8px; padding: 0.85rem;">
+                        <div style="font-size: 0.75rem; color: var(--text-secondary); margin-bottom: 0.25rem; display: flex; align-items: center; gap: 0.3rem;">
+                            <span>🛡️</span> Stop Loss Model
+                        </div>
+                        <div id="auto_sl_title" style="font-size: 0.95rem; font-weight: 700; color: #ffab40;">Exact Candle Low / High</div>
+                        <div id="auto_sl_sub" style="font-size: 0.7rem; color: rgba(255, 255, 255, 0.55); margin-top: 0.2rem;">Auto-detected confirmation candle wick</div>
+                    </div>
+
+                    <div style="background: rgba(0, 0, 0, 0.35); border: 1px solid rgba(255, 255, 255, 0.05); border-radius: 8px; padding: 0.85rem;">
+                        <div style="font-size: 0.75rem; color: var(--text-secondary); margin-bottom: 0.25rem; display: flex; align-items: center; gap: 0.3rem;">
+                            <span>🚀</span> Trailing Engine
+                        </div>
+                        <div id="auto_trail_title" style="font-size: 0.95rem; font-weight: 700; color: #64b5f6;">50-Pt Step Trailing</div>
+                        <div id="auto_trail_sub" style="font-size: 0.7rem; color: rgba(255, 255, 255, 0.55); margin-top: 0.2rem;">Holds 50 pts, then trails 1:1 to lock gains</div>
+                    </div>
+
+                    <div style="background: rgba(0, 0, 0, 0.35); border: 1px solid rgba(255, 255, 255, 0.05); border-radius: 8px; padding: 0.85rem;">
+                        <div style="font-size: 0.75rem; color: var(--text-secondary); margin-bottom: 0.25rem; display: flex; align-items: center; gap: 0.3rem;">
+                            <span>🎯</span> Take Profit Target
+                        </div>
+                        <div id="auto_tp_title" style="font-size: 0.95rem; font-weight: 700; color: #00e676;">+2.0% / 400 Pts Target</div>
+                        <div id="auto_tp_sub" style="font-size: 0.7rem; color: rgba(255, 255, 255, 0.55); margin-top: 0.2rem;">Algorithmic profit taking</div>
+                    </div>
+                </div>
+
+                <div style="margin-top: 0.85rem; font-size: 0.73rem; color: rgba(255, 255, 255, 0.6); display: flex; align-items: center; gap: 0.4rem;">
+                    <span>✨</span> <span>Zero manual guesswork. All SL/TP parameters are handled mathematically by the algorithm.</span>
+                </div>
+            </div>
+
+            <!-- Manual Risk Inputs (Hidden for automated strategies, shown for generic indicators) -->
+            <div id="manual_risk_grid" style="display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; margin-bottom: 2rem;">
                 <div class="form-group" style="margin-bottom: 0;">
                     <label class="form-label">Take Profit (%)</label>
-                    <input type="number" step="0.1" name="take_profit_pct" class="form-input" required placeholder="e.g., 3.0" value="3.0">
+                    <input type="number" step="0.1" name="take_profit_pct" id="take_profit_pct_input" class="form-input" required placeholder="e.g., 3.0" value="3.0">
                     <small class="text-secondary" style="display: block; margin-top: 0.25rem; font-size: 0.75rem;">Trade closes in profit at this %</small>
                 </div>
 
                 <div class="form-group" style="margin-bottom: 0;">
                     <label class="form-label">Stop Loss (%)</label>
-                    <input type="number" step="0.1" name="stop_loss_pct" class="form-input" required placeholder="e.g., 1.5" value="1.5">
+                    <input type="number" step="0.1" name="stop_loss_pct" id="stop_loss_pct_input" class="form-input" required placeholder="e.g., 1.5" value="1.5">
                     <small class="text-secondary" style="display: block; margin-top: 0.25rem; font-size: 0.75rem;">Trade closes in loss at this %</small>
                 </div>
             </div>
@@ -302,11 +346,57 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     const strategySelect = document.querySelector('select[name="strategy_id"]');
-    const tpInput = document.querySelector('input[name="take_profit_pct"]');
-    const slInput = document.querySelector('input[name="stop_loss_pct"]');
+    const tpInput = document.getElementById('take_profit_pct_input');
+    const slInput = document.getElementById('stop_loss_pct_input');
+    const manualRiskGrid = document.getElementById('manual_risk_grid');
+    const autoRiskCard = document.getElementById('automated_strategy_card');
+    const autoSlTitle = document.getElementById('auto_sl_title');
+    const autoSlSub = document.getElementById('auto_sl_sub');
+    const autoTrailTitle = document.getElementById('auto_trail_title');
+    const autoTrailSub = document.getElementById('auto_trail_sub');
+    const autoTpTitle = document.getElementById('auto_tp_title');
+    const autoTpSub = document.getElementById('auto_tp_sub');
+    const autoBadgeText = document.getElementById('auto_badge_text');
+    const tfSelect = document.querySelector('select[name="timeframe"]');
     
     const originalTp = "3.0";
     const originalSl = "1.5";
+
+    function showAutomatedCard(tpVal, slVal, slTitle, slSub, trailTitle, trailSub, tpTitle, tpSub, badgeText = 'Strategy Automated', tfVal = null) {
+        if (tpInput) tpInput.value = tpVal;
+        if (slInput) slInput.value = slVal;
+
+        if (manualRiskGrid) manualRiskGrid.style.display = 'none';
+        if (autoRiskCard) autoRiskCard.style.display = 'block';
+
+        if (autoSlTitle) autoSlTitle.textContent = slTitle;
+        if (autoSlSub) autoSlSub.textContent = slSub;
+        if (autoTrailTitle) autoTrailTitle.textContent = trailTitle;
+        if (autoTrailSub) autoTrailSub.textContent = trailSub;
+        if (autoTpTitle) autoTpTitle.textContent = tpTitle;
+        if (autoTpSub) autoTpSub.textContent = tpSub;
+        if (autoBadgeText) autoBadgeText.textContent = badgeText;
+
+        if (tfVal && tfSelect) {
+            tfSelect.value = tfVal;
+        }
+    }
+
+    function showManualRiskGrid(tfVal = null) {
+        if (autoRiskCard) autoRiskCard.style.display = 'none';
+        if (manualRiskGrid) manualRiskGrid.style.display = 'grid';
+
+        if (tpInput && (tpInput.value === '0.0' || tpInput.value === '0' || tpInput.value === '2.0' || tpInput.value === '2.5')) {
+            tpInput.value = originalTp;
+        }
+        if (slInput && (slInput.value === '0.0' || slInput.value === '0' || slInput.value === '1.0')) {
+            slInput.value = originalSl;
+        }
+
+        if (tfVal && tfSelect) {
+            tfSelect.value = tfVal;
+        }
+    }
 
     function toggleRiskFields() {
         if (!strategySelect) return;
@@ -315,39 +405,47 @@ document.addEventListener('DOMContentLoaded', function() {
 
         const className = selectedOption.getAttribute('data-class-name');
 
-        if (className === 'App\\Strategies\\EmaCrossoverStrategy') {
-            tpInput.value = '0.0';
-            slInput.value = '0.0';
-            tpInput.readOnly = true;
-            slInput.readOnly = true;
-            tpInput.style.opacity = '0.5';
-            slInput.style.opacity = '0.5';
-            tpInput.style.cursor = 'not-allowed';
-            slInput.style.cursor = 'not-allowed';
+        if (className === 'App\\Strategies\\EmaReversalBreakoutStrategy') {
+            showAutomatedCard(
+                '2.0',
+                '1.0',
+                'Exact Candle Low / High',
+                'Auto-detected confirmation candle wick',
+                '50-Pt Step Trailing',
+                'Holds 50 pts, then trails 1:1 to break-even & profit',
+                '+2.0% / 400 Pts Target',
+                'Algorithmic profit taking',
+                '⚡ Strategy Automated',
+                '5m'
+            );
+        } else if (className === 'App\\Strategies\\EmaCrossoverStrategy') {
+            showAutomatedCard(
+                '0.0',
+                '0.0',
+                'Opposite Crossover Exit',
+                'Dynamic exit when Fast EMA crosses back',
+                'Smart Trailing Active',
+                'Trails peak profit (+0.8% trigger)',
+                'Trend-Rider Model',
+                'Runs with the trend until momentum reverses',
+                '⚡ Trend Rider',
+                '15m'
+            );
         } else if (className === 'App\\Strategies\\SessionSweepFvgStrategy') {
-            tpInput.value = '2.5';
-            slInput.value = '1.0';
-            tpInput.readOnly = false;
-            slInput.readOnly = false;
-            tpInput.style.opacity = '1';
-            slInput.style.opacity = '1';
-            tpInput.style.cursor = 'auto';
-            slInput.style.cursor = 'auto';
-            const tfSelect = document.querySelector('select[name="timeframe"]');
-            if (tfSelect) tfSelect.value = '15m';
+            showAutomatedCard(
+                '2.5',
+                '1.0',
+                'Asian Swing Low / High',
+                'Liquidity sweep invalidation level',
+                '1:2.5 Fixed ICT RR',
+                'Fixed institutional risk-to-reward ratio',
+                '+2.5% Liquidity Target',
+                'Opposing session liquidity pool',
+                '⚡ ICT Model',
+                '15m'
+            );
         } else {
-            if (tpInput.value === '0.0' || tpInput.value === '0') {
-                tpInput.value = originalTp;
-            }
-            if (slInput.value === '0.0' || slInput.value === '0') {
-                slInput.value = originalSl;
-            }
-            tpInput.readOnly = false;
-            slInput.readOnly = false;
-            tpInput.style.opacity = '1';
-            slInput.style.opacity = '1';
-            tpInput.style.cursor = 'auto';
-            slInput.style.cursor = 'auto';
+            showManualRiskGrid();
         }
     }
 

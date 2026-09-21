@@ -60,6 +60,8 @@ class EvaluateStrategyJob implements ShouldQueue
                 $strategyClass = \App\Strategies\SmaCrossoverStrategy::class;
             } elseif (str_contains($normalized, 'bollinger')) {
                 $strategyClass = \App\Strategies\BollingerScalpingStrategy::class;
+            } elseif (str_contains($normalized, 'emareversal') || str_contains($normalized, 'reversalbreakout')) {
+                $strategyClass = \App\Strategies\EmaReversalBreakoutStrategy::class;
             }
 
             if (!$strategyClass || !class_exists($strategyClass)) {
@@ -121,30 +123,164 @@ class EvaluateStrategyJob implements ShouldQueue
                 }
             }
 
-            // 4. Evaluate Strategy Signal
-            $signal = $strategy->evaluate($candles, $this->bot->parameters ?? []);
+            // 4. Evaluate Strategy Signal (supports string 'BUY'/'SELL' or array with candle SL/TP)
+            $evalResult = $strategy->evaluate($candles, $this->bot->parameters ?? []);
+            $signal = 'HOLD';
+            $stratSL = null;
+            $stratTP = null;
 
-            // 4.5 Evaluate Risk Management (Stop Loss / Take Profit)
+            if (is_array($evalResult)) {
+                $signal = $evalResult['signal'] ?? 'HOLD';
+                $stratSL = isset($evalResult['stop_loss']) ? floatval($evalResult['stop_loss']) : null;
+                $stratTP = isset($evalResult['take_profit']) ? floatval($evalResult['take_profit']) : null;
+            } else {
+                $signal = (string)$evalResult;
+            }
+
+            // 4.5 Evaluate Risk Management (Stop Loss / Take Profit / Smart Trailing SL)
             if ($openPosition) {
-                $slPct = $this->bot->parameters['stop_loss_pct'] ?? 1.5; // Default 1.5% Stop Loss
-                $tpPct = $this->bot->parameters['take_profit_pct'] ?? 3.0; // Default 3.0% Take Profit
+                $slPct = floatval($this->bot->parameters['stop_loss_pct'] ?? 1.5); // Default 1.5% Stop Loss
+                $tpPct = floatval($this->bot->parameters['take_profit_pct'] ?? 3.0); // Default 3.0% Take Profit
+                $enableTrailing = $this->bot->parameters['trailing_sl'] ?? true; // Smart Trailing enabled by default
+                $trailTriggerPct = floatval($this->bot->parameters['trail_trigger_pct'] ?? 0.8); // Kicks in at +0.8% profit
+                $trailDistancePct = floatval($this->bot->parameters['trail_distance_pct'] ?? 0.5); // Trails 0.5% behind peak
 
-                $entryPrice = $openPosition->entry_price;
+                // Point-based Trailing (e.g. 50 points on BTC Reversal Breakout)
+                $isEmaReversal = ($strategyClass === \App\Strategies\EmaReversalBreakoutStrategy::class);
+                $trailPoints = floatval($this->bot->parameters['trail_points'] ?? ($isEmaReversal ? 50.0 : 0));
+                $usePointTrailing = $trailPoints > 0;
+                $tpPoints = floatval($this->bot->parameters['take_profit_points'] ?? ($isEmaReversal ? 400.0 : 0));
+
+                $entryPrice = floatval($openPosition->entry_price);
                 $pnlPct = 0;
 
                 if ($openPosition->side === 'LONG') {
                     $pnlPct = (($currentPrice - $entryPrice) / $entryPrice) * 100;
-                } else {
-                    $pnlPct = (($entryPrice - $currentPrice) / $entryPrice) * 100;
-                }
+                    $currentProfitPoints = $currentPrice - $entryPrice;
 
-                // Override signal to force close if SL/TP hit
-                if ($slPct > 0 && $pnlPct <= -$slPct) {
-                    $signal = ($openPosition->side === 'LONG') ? 'SELL' : 'BUY';
-                    \Log::info("Bot {$this->bot->id}: Stop Loss hit ({$pnlPct}%). Forcing {$signal} signal.");
-                } elseif ($tpPct > 0 && $pnlPct >= $tpPct) {
-                    $signal = ($openPosition->side === 'LONG') ? 'SELL' : 'BUY';
-                    \Log::info("Bot {$this->bot->id}: Take Profit hit ({$pnlPct}%). Forcing {$signal} signal.");
+                    // 1. High-water mark (peak price) tracking
+                    $peakPrice = floatval($openPosition->peak_price ?: $entryPrice);
+                    if ($currentPrice > $peakPrice) {
+                        $peakPrice = $currentPrice;
+                        $openPosition->peak_price = $peakPrice;
+                    }
+                    $peakProfitPct = (($peakPrice - $entryPrice) / $entryPrice) * 100;
+                    $peakProfitPoints = $peakPrice - $entryPrice;
+
+                    // 2. Base initial Stop Loss Price
+                    $initialSlPrice = $entryPrice * (1 - ($slPct / 100));
+                    $currentTrailingSl = floatval($openPosition->trailing_sl ?: $initialSlPrice);
+
+                    // 3. Dynamic Trailing SL Calculation
+                    if ($enableTrailing) {
+                        if ($usePointTrailing) {
+                            // 50-Point Step Trailing: Hold initial candle SL until +50 points profit.
+                            // Once peak reaches >= 50 points, trail 50 points behind peak (Cost to Cost at 50, then +1 pt per +1 pt).
+                            if ($peakProfitPoints >= $trailPoints) {
+                                $breakEvenPrice = $entryPrice; // Break-even floor
+                                $calculatedTrail = $peakPrice - $trailPoints;
+                                $newTrailingSl = max($breakEvenPrice, $calculatedTrail, $currentTrailingSl);
+
+                                if ($newTrailingSl > $currentTrailingSl) {
+                                    $currentTrailingSl = $newTrailingSl;
+                                    $openPosition->trailing_sl = $currentTrailingSl;
+                                    \Log::info("Bot {$this->bot->id} (LONG): 50-Pt Trailing SL tightened UP to \${$currentTrailingSl} (Peak profit: \${$peakProfitPoints} pts).");
+                                }
+                            }
+                        } elseif ($peakProfitPct >= $trailTriggerPct) {
+                            // Percentage-based Trailing SL fallback for other strategies
+                            $breakEvenPrice = $entryPrice * 1.0005;
+                            $calculatedTrail = $peakPrice * (1 - ($trailDistancePct / 100));
+                            $newTrailingSl = max($breakEvenPrice, $calculatedTrail, $currentTrailingSl);
+
+                            if ($newTrailingSl > $currentTrailingSl) {
+                                $currentTrailingSl = $newTrailingSl;
+                                $openPosition->trailing_sl = $currentTrailingSl;
+                                \Log::info("Bot {$this->bot->id} (LONG): Trailing SL tightened UP to \${$currentTrailingSl} (Peak profit: " . round($peakProfitPct, 2) . "%).");
+                            }
+                        }
+                    } else {
+                        if (!$openPosition->trailing_sl) {
+                            $openPosition->trailing_sl = $initialSlPrice;
+                        }
+                    }
+
+                    $openPosition->save();
+
+                    // 4. Check Exit Conditions
+                    $isTpHit = ($tpPct > 0 && $pnlPct >= $tpPct) || ($tpPoints > 0 && $currentProfitPoints >= $tpPoints);
+                    if ($currentTrailingSl > 0 && $currentPrice <= $currentTrailingSl) {
+                        $signal = 'SELL';
+                        $trailedGain = (($currentTrailingSl - $entryPrice) / $entryPrice) * 100;
+                        \Log::info("Bot {$this->bot->id} (LONG): Stop Loss / Trailing SL hit at \${$currentPrice} (SL was \${$currentTrailingSl}, Gain: " . round($trailedGain, 2) . "%).");
+                    } elseif ($isTpHit) {
+                        $signal = 'SELL';
+                        \Log::info("Bot {$this->bot->id} (LONG): Take Profit hit ({$pnlPct}% / {$currentProfitPoints} pts). Forcing SELL signal.");
+                    }
+                } else {
+                    // SHORT Position
+                    $pnlPct = (($entryPrice - $currentPrice) / $entryPrice) * 100;
+                    $currentProfitPoints = $entryPrice - $currentPrice;
+
+                    // 1. Low-water mark (peak dip price) tracking
+                    $peakPrice = floatval($openPosition->peak_price ?: $entryPrice);
+                    if ($peakPrice <= 0 || $currentPrice < $peakPrice) {
+                        $peakPrice = $currentPrice;
+                        $openPosition->peak_price = $peakPrice;
+                    }
+                    $peakProfitPct = (($entryPrice - $peakPrice) / $entryPrice) * 100;
+                    $peakProfitPoints = $entryPrice - $peakPrice;
+
+                    // 2. Base initial Stop Loss Price for SHORT
+                    $initialSlPrice = $entryPrice * (1 + ($slPct / 100));
+                    $currentTrailingSl = floatval($openPosition->trailing_sl ?: $initialSlPrice);
+
+                    // 3. Dynamic Trailing SL Calculation
+                    if ($enableTrailing) {
+                        if ($usePointTrailing) {
+                            // 50-Point Step Trailing for SHORT: Hold initial candle SL until +50 points profit (dip).
+                            // Once peak dip reaches >= 50 points, trail 50 points above peak low (Cost to Cost at 50, then +1 pt per +1 pt).
+                            if ($peakProfitPoints >= $trailPoints) {
+                                $breakEvenPrice = $entryPrice; // Break-even ceiling
+                                $calculatedTrail = $peakPrice + $trailPoints;
+                                $newTrailingSl = min($breakEvenPrice, $calculatedTrail, $currentTrailingSl);
+
+                                if ($newTrailingSl < $currentTrailingSl) {
+                                    $currentTrailingSl = $newTrailingSl;
+                                    $openPosition->trailing_sl = $currentTrailingSl;
+                                    \Log::info("Bot {$this->bot->id} (SHORT): 50-Pt Trailing SL tightened DOWN to \${$currentTrailingSl} (Peak profit: \${$peakProfitPoints} pts).");
+                                }
+                            }
+                        } elseif ($peakProfitPct >= $trailTriggerPct) {
+                            // Percentage-based Trailing SL fallback for other strategies
+                            $breakEvenPrice = $entryPrice * 0.9995;
+                            $calculatedTrail = $peakPrice * (1 + ($trailDistancePct / 100));
+                            $newTrailingSl = min($breakEvenPrice, $calculatedTrail, $currentTrailingSl);
+
+                            if ($newTrailingSl < $currentTrailingSl) {
+                                $currentTrailingSl = $newTrailingSl;
+                                $openPosition->trailing_sl = $currentTrailingSl;
+                                \Log::info("Bot {$this->bot->id} (SHORT): Trailing SL tightened DOWN to \${$currentTrailingSl} (Peak profit: " . round($peakProfitPct, 2) . "%).");
+                            }
+                        }
+                    } else {
+                        if (!$openPosition->trailing_sl) {
+                            $openPosition->trailing_sl = $initialSlPrice;
+                        }
+                    }
+
+                    $openPosition->save();
+
+                    // 4. Check Exit Conditions
+                    $isTpHit = ($tpPct > 0 && $pnlPct >= $tpPct) || ($tpPoints > 0 && $currentProfitPoints >= $tpPoints);
+                    if ($currentTrailingSl > 0 && $currentPrice >= $currentTrailingSl) {
+                        $signal = 'BUY';
+                        $trailedGain = (($entryPrice - $currentTrailingSl) / $entryPrice) * 100;
+                        \Log::info("Bot {$this->bot->id} (SHORT): Stop Loss / Trailing SL hit at \${$currentPrice} (SL was \${$currentTrailingSl}, Gain: " . round($trailedGain, 2) . "%).");
+                    } elseif ($isTpHit) {
+                        $signal = 'BUY';
+                        \Log::info("Bot {$this->bot->id} (SHORT): Take Profit hit ({$pnlPct}% / {$currentProfitPoints} pts). Forcing BUY signal.");
+                    }
                 }
             }
 
@@ -285,7 +421,18 @@ class EvaluateStrategyJob implements ShouldQueue
                     'executed_at' => now(),
                 ]);
 
-                // Create Open Position with exact broker executed lot size and price
+                // Determine initial SL: Prioritize Strategy's candle High/Low SL, fallback to %
+                $initialSl = null;
+                if ($stratSL && $stratSL > 0) {
+                    $initialSl = $stratSL;
+                } else {
+                    $slPct = floatval($this->bot->parameters['stop_loss_pct'] ?? 1.5);
+                    $initialSl = $signal === 'BUY'
+                        ? $execPrice * (1 - ($slPct / 100))
+                        : $execPrice * (1 + ($slPct / 100));
+                }
+
+                // Create Open Position with exact broker executed lot size, price, and candle-based SL
                 Position::create([
                     'bot_instance_id' => $this->bot->id,
                     'user_id' => $this->bot->user_id,
@@ -293,6 +440,8 @@ class EvaluateStrategyJob implements ShouldQueue
                     'side' => $signal === 'BUY' ? 'LONG' : 'SHORT',
                     'quantity' => $actualFilled,
                     'entry_price' => $execPrice,
+                    'peak_price' => $execPrice,
+                    'trailing_sl' => $initialSl,
                     'status' => 'OPEN',
                     'opened_at' => now(),
                 ]);

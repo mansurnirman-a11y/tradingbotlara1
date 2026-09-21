@@ -193,6 +193,11 @@
                             </td>
                             <td style="padding: 1rem; font-weight: 600; font-size: 0.95rem;">
                                 ${{ number_format($position->entry_price, 2) }}
+                                @if($position->trailing_sl)
+                                    <div style="font-size: 0.72rem; color: var(--accent-green); margin-top: 3px; display: flex; align-items: center; gap: 3px;" title="Dynamic Trailing Stop Loss Level">
+                                        <span>🛡️ Trail SL:</span> <strong>${{ number_format($position->trailing_sl, 2) }}</strong>
+                                    </div>
+                                @endif
                             </td>
                             <td style="padding: 1rem;">
                                 <strong style="color: #fff;">${{ number_format($position->margin_used ?? 0, 2) }}</strong>

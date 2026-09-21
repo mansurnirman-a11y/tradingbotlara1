@@ -422,13 +422,13 @@ document.addEventListener('DOMContentLoaded', function() {
             showAutomatedCard(
                 '0.0',
                 '0.0',
-                'Opposite Crossover Exit',
-                'Dynamic exit when Fast EMA crosses back',
-                'Smart Trailing Active',
-                'Trails peak profit (+0.8% trigger)',
-                'Trend-Rider Model',
-                'Runs with the trend until momentum reverses',
-                '⚡ Trend Rider',
+                'Signal-to-Signal Hold',
+                'Holds position until opposite crossover',
+                'Zero Early Exits',
+                'Trails & premature TP disabled. Rides full wave',
+                'Opposite Cross Reversal',
+                'Flips Long 🔁 Short on Golden & Death Cross',
+                '⚡ Signal to Signal',
                 '15m'
             );
         } else if (className === 'App\\Strategies\\SessionSweepFvgStrategy') {

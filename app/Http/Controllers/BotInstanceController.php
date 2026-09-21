@@ -313,6 +313,7 @@ class BotInstanceController extends Controller
                 'leverage' => floatval($validated['leverage'] ?? 25),
                 'trail_points' => ($strategy->class_name === \App\Strategies\EmaReversalBreakoutStrategy::class) ? 50.0 : null,
                 'take_profit_points' => ($strategy->class_name === \App\Strategies\EmaReversalBreakoutStrategy::class) ? 400.0 : null,
+                'signal_to_signal' => ($strategy->class_name === \App\Strategies\EmaCrossoverStrategy::class) ? true : false,
             ],
             'status' => 'stopped',
         ]);

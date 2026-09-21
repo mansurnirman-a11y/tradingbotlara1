@@ -422,13 +422,13 @@ document.addEventListener('DOMContentLoaded', function() {
             showAutomatedCard(
                 '0.0',
                 '0.0',
-                'Signal-to-Signal Hold',
-                'Holds position until opposite crossover',
-                'Zero Early Exits',
-                'Trails & premature TP disabled. Rides full wave',
-                'Opposite Cross Reversal',
-                'Flips Long 🔁 Short on Golden & Death Cross',
-                '⚡ Signal to Signal',
+                'Liquidation Buffer SL',
+                'Starts at exact liquidation point (100% margin buffer)',
+                'Dynamic Liq-Trailing',
+                'Trails 1:1 behind peak price to lock profit & prevent wipeout',
+                'Signal-to-Signal Flip',
+                'Reverses position on opposite Golden & Death Cross',
+                '⚡ Liquidation Trailing',
                 '15m'
             );
         } else if (className === 'App\\Strategies\\SessionSweepFvgStrategy') {

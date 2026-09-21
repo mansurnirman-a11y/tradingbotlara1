@@ -145,35 +145,71 @@ class EvaluateStrategyJob implements ShouldQueue
             // 4.5 Evaluate Risk Management (Stop Loss / Take Profit / Smart Trailing SL)
             if ($openPosition) {
                 if ($isSignalToSignal) {
-                    // Pure Signal-to-Signal Strategy (e.g. EMA Crossover):
-                    // Does NOT use trailing stop loss or early take-profit exits.
-                    // The position is held until an opposing strategy crossover signal triggers a reversal (Flip).
+                    // Liquidation-Based Dynamic Trailing SL Engine:
+                    // Initial SL starts at the exact Liquidation Point (Entry Price / Leverage).
+                    // As the market moves into profit, SL trails 1:1 behind peak price by the liquidation distance.
+                    $botLeverage = floatval($this->bot->parameters['leverage'] ?? 50.0);
+                    if ($botLeverage <= 0) $botLeverage = 50.0;
+
                     $entryPrice = floatval($openPosition->entry_price);
+                    $liqDistancePrice = $entryPrice / $botLeverage;
+
                     if ($openPosition->side === 'LONG') {
                         $peakPrice = floatval($openPosition->peak_price ?: $entryPrice);
                         if ($currentPrice > $peakPrice) {
-                            $openPosition->peak_price = $currentPrice;
-                            $openPosition->save();
+                            $peakPrice = $currentPrice;
+                            $openPosition->peak_price = $peakPrice;
+                        }
+
+                        // Base initial SL at Liquidation Point if not already set
+                        $initialLiqSl = $entryPrice - $liqDistancePrice;
+                        $currentTrailingSl = floatval($openPosition->trailing_sl ?: $initialLiqSl);
+
+                        // Trail UP as peak price rises:
+                        $newTrailingSl = $peakPrice - $liqDistancePrice;
+                        if ($newTrailingSl > $currentTrailingSl) {
+                            $currentTrailingSl = $newTrailingSl;
+                            $openPosition->trailing_sl = $currentTrailingSl;
+                            \Log::info("Bot {$this->bot->id} (LONG): Liquidation Trailing SL tightened UP to \${$currentTrailingSl} (Peak: \${$peakPrice}, Distance: \${$liqDistancePrice}).");
+                        }
+
+                        $openPosition->save();
+
+                        // Check if price retraced back to Trailing SL (or liquidation protection level)
+                        if ($currentTrailingSl > 0 && $currentPrice <= $currentTrailingSl) {
+                            $signal = 'SELL';
+                            $isRiskExit = true;
+                            $trailedGain = (($currentTrailingSl - $entryPrice) / $entryPrice) * 100;
+                            \Log::info("Bot {$this->bot->id} (LONG): Liquidation Trailing SL hit at \${$currentPrice} (SL was \${$currentTrailingSl}, Gain/Loss: " . round($trailedGain, 2) . "%).");
                         }
                     } else {
+                        // SHORT Position
                         $peakPrice = floatval($openPosition->peak_price ?: $entryPrice);
                         if ($peakPrice <= 0 || $currentPrice < $peakPrice) {
-                            $openPosition->peak_price = $currentPrice;
-                            $openPosition->save();
+                            $peakPrice = $currentPrice;
+                            $openPosition->peak_price = $peakPrice;
                         }
-                    }
 
-                    // Optional: Emergency Hard Stop Loss ONLY if explicitly configured by user (> 0)
-                    $emergencySlPct = floatval($this->bot->parameters['emergency_sl_pct'] ?? 0);
-                    if ($emergencySlPct > 0) {
-                        $pnlPct = $openPosition->side === 'LONG'
-                            ? (($currentPrice - $entryPrice) / $entryPrice) * 100
-                            : (($entryPrice - $currentPrice) / $entryPrice) * 100;
+                        // Base initial SL at Liquidation Point if not already set
+                        $initialLiqSl = $entryPrice + $liqDistancePrice;
+                        $currentTrailingSl = floatval($openPosition->trailing_sl ?: $initialLiqSl);
 
-                        if ($pnlPct <= -$emergencySlPct) {
-                            $signal = ($openPosition->side === 'LONG') ? 'SELL' : 'BUY';
+                        // Trail DOWN as peak dip decreases:
+                        $newTrailingSl = $peakPrice + $liqDistancePrice;
+                        if ($currentTrailingSl <= 0 || $newTrailingSl < $currentTrailingSl) {
+                            $currentTrailingSl = $newTrailingSl;
+                            $openPosition->trailing_sl = $currentTrailingSl;
+                            \Log::info("Bot {$this->bot->id} (SHORT): Liquidation Trailing SL tightened DOWN to \${$currentTrailingSl} (Peak dip: \${$peakPrice}, Distance: \${$liqDistancePrice}).");
+                        }
+
+                        $openPosition->save();
+
+                        // Check if price bounced back to Trailing SL (or liquidation protection level)
+                        if ($currentTrailingSl > 0 && $currentPrice >= $currentTrailingSl) {
+                            $signal = 'BUY';
                             $isRiskExit = true;
-                            \Log::warning("Bot {$this->bot->id} ({$openPosition->side}): Emergency Stop Loss triggered at {$pnlPct}% (Limit: -{$emergencySlPct}%).");
+                            $trailedGain = (($entryPrice - $currentTrailingSl) / $entryPrice) * 100;
+                            \Log::info("Bot {$this->bot->id} (SHORT): Liquidation Trailing SL hit at \${$currentPrice} (SL was \${$currentTrailingSl}, Gain/Loss: " . round($trailedGain, 2) . "%).");
                         }
                     }
                 } else {
@@ -475,9 +511,14 @@ class EvaluateStrategyJob implements ShouldQueue
                     'executed_at' => now(),
                 ]);
 
-                // Determine initial SL: Prioritize Strategy's candle High/Low SL, fallback to % (if configured > 0)
+                // Determine initial SL: Prioritize Strategy's candle High/Low SL, or Liquidation buffer for Signal-to-Signal
                 $initialSl = null;
-                if (!$isSignalToSignal) {
+                if ($isSignalToSignal) {
+                    $liqBufferPrice = $leverage > 0 ? ($execPrice / $leverage) : ($execPrice * 0.02);
+                    $initialSl = $signal === 'BUY'
+                        ? ($execPrice - $liqBufferPrice)
+                        : ($execPrice + $liqBufferPrice);
+                } else {
                     if ($stratSL && $stratSL > 0) {
                         $initialSl = $stratSL;
                     } else {

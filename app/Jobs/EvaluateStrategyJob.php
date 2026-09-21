@@ -167,8 +167,8 @@ class EvaluateStrategyJob implements ShouldQueue
                     $peakProfitPct = (($peakPrice - $entryPrice) / $entryPrice) * 100;
                     $peakProfitPoints = $peakPrice - $entryPrice;
 
-                    // 2. Base initial Stop Loss Price
-                    $initialSlPrice = $entryPrice * (1 - ($slPct / 100));
+                    // 2. Base initial Stop Loss Price (only if slPct > 0)
+                    $initialSlPrice = $slPct > 0 ? ($entryPrice * (1 - ($slPct / 100))) : 0;
                     $currentTrailingSl = floatval($openPosition->trailing_sl ?: $initialSlPrice);
 
                     // 3. Dynamic Trailing SL Calculation
@@ -231,8 +231,8 @@ class EvaluateStrategyJob implements ShouldQueue
                     $peakProfitPct = (($entryPrice - $peakPrice) / $entryPrice) * 100;
                     $peakProfitPoints = $entryPrice - $peakPrice;
 
-                    // 2. Base initial Stop Loss Price for SHORT
-                    $initialSlPrice = $entryPrice * (1 + ($slPct / 100));
+                    // 2. Base initial Stop Loss Price for SHORT (only if slPct > 0)
+                    $initialSlPrice = $slPct > 0 ? ($entryPrice * (1 + ($slPct / 100))) : 0;
                     $currentTrailingSl = floatval($openPosition->trailing_sl ?: $initialSlPrice);
 
                     // 3. Dynamic Trailing SL Calculation
@@ -421,15 +421,17 @@ class EvaluateStrategyJob implements ShouldQueue
                     'executed_at' => now(),
                 ]);
 
-                // Determine initial SL: Prioritize Strategy's candle High/Low SL, fallback to %
+                // Determine initial SL: Prioritize Strategy's candle High/Low SL, fallback to % (if configured > 0)
                 $initialSl = null;
                 if ($stratSL && $stratSL > 0) {
                     $initialSl = $stratSL;
                 } else {
                     $slPct = floatval($this->bot->parameters['stop_loss_pct'] ?? 1.5);
-                    $initialSl = $signal === 'BUY'
-                        ? $execPrice * (1 - ($slPct / 100))
-                        : $execPrice * (1 + ($slPct / 100));
+                    if ($slPct > 0) {
+                        $initialSl = $signal === 'BUY'
+                            ? $execPrice * (1 - ($slPct / 100))
+                            : $execPrice * (1 + ($slPct / 100));
+                    }
                 }
 
                 // Create Open Position with exact broker executed lot size, price, and candle-based SL
